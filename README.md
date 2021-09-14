@@ -1,7 +1,7 @@
 # Spark paper
 
 This is the LaTeX source of the technical paper for the Spark transaction protocol.
-Release versions are posted to the [IACR preprint archive](https://eprint.iacr.org/).
+Release versions are posted to the [IACR preprint archive](https://eprint.iacr.org/2021/1173).
 
 ## Testing
 
