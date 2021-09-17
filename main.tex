@@ -118,14 +118,15 @@ We present an instantiation of such a proving system in Appendix \ref{app:parall
 
 \subsection{Authenticated Encryption Scheme}
 
-We require the use of an authenticated symmetric encryption scheme.
+We require the use of an authenticated symmetric encryption with associated data (AEAD) scheme.
 In the context of the Spark protocol, this construction is used to encrypt value and arbitrary memo data for use by the sender and recipient of a transaction.
 
 Let $pp_{\text{sym}}$ be the public parameters for such a construction.
-The construction itself is a tuple of algorithms $(\text{SymKeyGen},\text{SymEncrypt},\text{SymDecrypt})$.
-Here $\text{SymKeyGen}$ is a key derivation function that accepts as input an arbitrary string, and produces a key in the appropriate key space.
-The algorithm $\text{SymEncrypt}$ accepts as input a key and arbitrary message string, and produces ciphertext in the appropriate space.
-The algorithm $\text{SymDecrypt}$ accepts as input a key and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
+The construction itself is a tuple of algorithms $(\text{AEADKeyGen},\text{AEADEncrypt},\text{AEADDecrypt})$.
+Here $\text{AEADKeyGen}$ is a key derivation function that accepts as input an arbitrary string, and produces a key in the appropriate key space.
+The algorithm $\text{AEADEncrypt}$ accepts as input a key, associated data, and arbitrary message string, and produces ciphertext in the appropriate space.
+The algorithm $\text{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
+For the purposes of this protocol, we may assume the use of a fixed nonce, as keys are used uniquely with given associated data.
 
 Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context.
 
@@ -263,7 +264,7 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \item Compute the recovery key $K = \com(k, 0)$.
 \item Generate the value commitment $C = \com(v,\hash_{\text{val}}(kQ_1))$.
 \item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(kQ_1))).$$
-\item Generate a symmetric encryption key $k_{\text{sym}} = \text{SymKeyGen}(kQ_1)$; encrypt the value $\overline{v} = \text{SymEnc}(k_{\text{sym}},v)$ (if $b=0$) and memo $\overline{m} = \text{SymEnc}(k_{\text{sym}},m)$.
+\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(kQ_1)$; encrypt the value $\overline{v} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$ (if $b=0$) and memo $\overline{m} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m)$.
 \item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \overline{v}, \overline{m})$.
 Otherwise, output the tuple $(S, K, C, v, \overline{m})$.
 \end{enumerate}
@@ -302,7 +303,7 @@ If the coin is not destined for the public address, the algorithm returns failur
 \item Parse the incoming view key $\addr_{\text{in}} = s_1$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item If $\com(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0) + Q_2 \neq S$, return failure.
-\item Generate a symmetric encryption key $k_{\text{sym}} = \text{SymKeyGen}(s_1 K)$; decrypt the value $v = \text{SymDec}(k_{\text{sym}},\overline{v})$ (if $b=0$) and memo $m = \text{SymDec}(k_{\text{sym}},\overline{m})$.
+\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
 \end{enumerate}
@@ -322,7 +323,7 @@ If the coin is not destined for the public address, the algorithm returns failur
 \item Parse the required full view key components as $\addr_{\text{full}} = (s_1, s_2)$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item If $\com(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0) + Q_2 \neq S$, return failure.
-\item Generate a symmetric encryption key $k_{\text{sym}} = \text{SymKeyGen}(s_1 K)$; decrypt the value $v = \text{SymDec}(k_{\text{sym}},\overline{v})$ (if $b=1$) and memo $m = \text{SymDec}(k_{\text{sym}},\overline{m})$.
+\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=1$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Compute the serial number $s = \hash_{\text{ser}}(s_1 K,Q_1,Q_2) + s_2$ and tag $T = (1/s)H$.
 \item Output the tuple $(s, T, v, m)$.
@@ -910,8 +911,8 @@ Depending on the query type, the challenger acts as follows:
             \item Samples a recovery key $K$ uniformly at random.
             \item Samples a serial number commitment $S$ uniformly at random.
             \item Samples a value commitment $C$ uniformly at random.
-            \item Samples a random input used to produce a symmetric encryption key $\text{SymKeyGen} \to k_{\text{enc}}$.
-            \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $\text{SymEnc}(k_{\text{enc}}, \widetilde{m}) \to \overline{m}$.
+            \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
+            \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}.$$
         \end{enumerate}
         \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $(C - \com(v,0)$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
@@ -933,9 +934,9 @@ Depending on the query type, the challenger acts as follows:
                 \item Samples a recovery key $K_j$ uniformly at random.
                 \item Samples a serial number commitment $S_j$ uniformly at random.
                 \item Samples a value commitment $\overline{C}_j$ uniformly at random.
-                \item Samples a random input used to produce a symmetric encryption key $\text{SymKeyGen} \to k_{\text{enc}}$.
-                \item Simulates the value encryption by selecting random $\widetilde{v}$ of the proper length, and encrypting it to produce $\text{SymEnc}(k_{\text{enc}}, \widetilde{v}) \to \overline{v}_j$.
-                \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $\text{SymEnc}(k_{\text{enc}}, \widetilde{m}) \to \overline{m}_j$.
+                \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
+                \item Simulates the value encryption by selecting random $\widetilde{v}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{val},\widetilde{v}) \to \overline{v}_j.$$
+                \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}_j.$$
                 \item Simulates a range proof $(\Pi_{\text{rp}})_j$ on the statement $(\overline{C}_j)$.
             \end{enumerate}
         \end{enumerate}
