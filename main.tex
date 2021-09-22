@@ -9,6 +9,7 @@
 \newcommand{\hash}{\mathcal{H}}
 \newcommand{\addr}{\operatorname{addr}}
 \newcommand{\com}{\operatorname{Com}}
+\newcommand{\dcom}{\operatorname{DCom}}
 
 
 \begin{document}
@@ -42,6 +43,7 @@ The Sprout and Sapling protocols supported by Zcash \cite{zcash} (and their curr
 The Mimblewimble-based construction used as the basis for Grin can leak graph information prior to a merging operation performed by miners \cite{mw}.
 To mitigate Mimblewimble's linkability issue, Beam has designed and implemented into its system an adaption of Lelantus for use with the Mimblewimble protocol which enables obfuscation of the transaction graph \cite{LMW}.
 The Lelantus protocol currently used in Firo does not provide recipient privacy; it supports only mints and signer-ambiguous spends of arbitrary amounts that interact with transparent Bitcoin-style outputs, which can leak information about recipient identity \cite{lelantus}.
+Seraphis \cite{seraphis} is a transaction protocol framework of similar design being developed concurrently.
 
 Here we introduce Spark, an iteration on the Lelantus protocol enabling trustless private transactions which supports sender, receiver and transaction amount privacy.
 Transactions in Spark, like those in Lelantus and Monero, use specified sender anonymity sets composed of previously-generated shielded outputs.
@@ -50,7 +52,7 @@ A parallel proving system adapted from a construction by Groth and Bootle \texti
 Spark transactions support efficient verification in batches, where range and spend proofs can take advantage of common proof elements and parameters to lower the marginal cost of verifying each proof in such a batch; when coupled with suitably-chosen sender anonymity sets, the verification time savings of batch verification can be significant.
 
 Spark enables additional useful functionality.
-The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
+The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
 The protocol further adds two levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
@@ -68,17 +70,19 @@ Let $\mathbb{N}$ be the set $\{0,1,2,\ldots\}$ of non-negative integers.
 
 A homomorphic commitment scheme is a construction producing one-way algebraic representations of input values.
 The Pedersen commitment scheme is a homomorphic commitment scheme that uses a particularly simple linear combination construction.
-Let $pp_{\text{com}} = (\G, \F, G, F)$ be the public parameters for a Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $G,F \in \G$ are uniformly-sampled independent generators.
-The commitment scheme contains an algorithm $\com: \F^2 \to \G$, where $\com(v,r) = vG + rF$ that is homomorphic in the sense that $$\com(v_1,r_1) + \com(v_2,r_2) = \com(v_1 + v_2,r_1 + r_1)$$ for all such input values $v_1,v_2 \in \F$ and blinding factors $r_1,r_2 \in \F$.
+Let $pp_{\text{com}} = (\G, \F, G, H)$ be the public parameters for a Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $G,H \in \G$ are uniformly-sampled independent generators.
+The commitment scheme contains an algorithm $\com: \F^2 \to \G$, where $\com(v,r) = vG + rH$ that is homomorphic in the sense that $$\com(v_1,r_1) + \com(v_2,r_2) = \com(v_1 + v_2,r_1 + r_1)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2 \in \F$.
 Further, the construction is perfectly hiding and computationally binding.
 
-We also require a matrix version of this construction, where input values $v$ are matrices with entries in $\F$, and the generator $G$ is replaced with a corresponding matrix of independent generators.
-The definition and security properties extend naturally to this case.
+This definition extends naturally to a double-masked commitment scheme.
+Let $pp_{\text{dcom}} = (\G, \F, F, G, H)$ be the public parameters for a double-masked Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H \in \G$ are uniformly-sampled independent generators.
+The commitment scheme contains an algorithm $\dcom: \F^3 \to \G$, where $\dcom(v,r,s) = vF + rG + sH$ that is homomorphic in the sense that $$\dcom(v_1,r_1,s_1) + \dcom(v_2,r_2,s_2) = \dcom(v_1 + v_2,r_1 + r_2,s_1 + s_2)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2,s_1,s_2 \in \F$.
+Further, the construction is perfectly hiding and computationally binding.
 
 
 \subsection{Representation proving system}
 
-A representation proof is used to demonstrate knowledge of a discrete logarithm.
+A representation proof is used to demonstrate knowledge of a discrete logarithm in zero knowledge.
 Let $pp_{\text{rep}} = (\G, \F)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problems is hard and $\F$ is its scalar field.
 
 The proving system itself is a tuple of algorithms $(\text{RepProve},\text{RepVerify})$ for the following relation:
@@ -89,19 +93,19 @@ The well-known Schnorr proving system may be used for this purpose.
 
 \subsection{Modified Chaum-Pedersen Proving System}
 
-A Chaum-Pedersen proof is used to demonstrate discrete logarithm equality.
-Here we require a modification to the standard proving system that uses a second group generator.
-Let $pp_{\text{chaum}} = (\G, \F, G, F, H)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $G,F,H \in \G$ are uniformly-sampled independent generators.
+A Chaum-Pedersen proof is used to demonstrate discrete logarithm equality in zero knowledge.
+Here we require a modification to the standard proving system that uses additional group generators.
+Let $pp_{\text{chaum}} = (\G, \F, F, G, H, U)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H,U \in \G$ are uniformly-sampled independent generators.
 
 The proving system is a tuple of algorithms $(\text{ChaumProve},\text{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, Y, Z \in \G ; (x, y) \in \F : Y = xG + yF, H = xZ \right\}$$
+$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
 
 We present an instantiation of such a proving system in Appendix \ref{app:chaum}, along with security proofs.
 
 
 \subsection{Parallel One-out-of-Many Proving System}
 
-We require the use of a parallel one-out-of-many proving system that shows knowledge of openings of commitments to zero at the same index among two sets of group elements.
+We require the use of a parallel one-out-of-many proving system that shows knowledge of openings of commitments to zero at the same index among two sets of group elements in zero knowledge.
 In the context of the Spark protocol, this will be used to mask consumed coin serial number and value commitments for balance, ownership, and double-spend purposes.
 We show how to produce such a proving system as a straightforward modification of a construction by Groth and Kohlweiss \cite{groth} that was generalized by Bootle \textit{et al.} \cite{bootle}.
 
@@ -181,7 +185,7 @@ Coins additionally bind recipient addresses in an indistinguishable way; this ma
 \textbf{Tags.} Tags are used to prevent coins from being consumed in multiple transactions.
 When generating a $Spend$ transaction, the sender produces the tag for each consumed coin and includes it on the ledger.
 When verifying transactions are valid, it suffices to ensure that tags do not appear on the ledger in any previous transactions.
-Tags are bound to coins uniquely via the serial number, but cannot be associated to specific coins without the corresponding full view key.
+Tags are bound to validly-recoverable coins uniquely via the serial number commitment secret data, but cannot be associated to specific coins without the corresponding full view key.
 
 \textbf{Algorithms}. Spark is a decentralized anonymous payment (DAP) system defined as the following polynomial-time algorithms:
 \begin{itemize}
@@ -215,13 +219,14 @@ In our setup the public parameters $pp$ are comprised of the corresponding publi
 \begin{enumerate}
 \item Sample a prime-order group $\G$ in which the discrete logarithm, decisional Diffie-Hellman, and computational Diffie-Hellman problems are hard.
 Let $\F$ be the scalar field of $\G$.
-\item Sample $F,G,H \in \G$ uniformly at random.
+\item Sample $F,G,H,U \in \G$ uniformly at random.
 In practice, these generators may be chosen using a suitable cryptographic hash function on public input.
 \item Sample cryptographic hash functions $$\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
 In practice, these hash functions may be chosen using domain separation of a single suitable cryptographic hash function.
-\item Compute the public parameters $pp_{\text{com}} = (\G,\F,G,F)$ of a Pedersen commitment scheme.
+\item Compute the public parameters $pp_{\text{com}} = (\G,\F,G,H)$ of a Pedersen commitment scheme.
+\item Compute the public parameters $pp_{\text{dcom}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
 \item Compute the public parameters $pp_{\text{rep}} = (\G,\F)$ of a representation proving system.
-\item Compute the public parameters $pp_{\text{chaum}} = (\G,\F,G,F,H)$ of the modified Chaum-Pedersen proving system.
+\item Compute the public parameters $pp_{\text{chaum}} = (\G,\F,F,G,H,U)$ of the modified Chaum-Pedersen proving system.
 \item Compute the public parameters $pp_{\text{par}} = (\G,\F,n,m,pp_{\text{com}})$ of the parallel one-out-of-many proving system.
 \item Compute the public parameters $pp_{\text{sym}}$ of an authenticated symmetric encryption scheme.
 \item Compute the public parameters $pp_{\text{rp}} = (\G,\F,v_{\text{max}},pp_{\text{com}})$ of a range proving system.
@@ -238,8 +243,8 @@ We describe the construction of all addresses and underlying key types used in t
 \textbf{Outputs:} Address key tuple $(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
 
 \begin{enumerate}
-\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \com(0, r)$.
-\item Compute $Q_1 = \com(s_1, 0)$ and $Q_2 = \com(s_2, r)$.
+\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \dcom(0, r, 0)$.
+\item Compute $Q_1 = \dcom(s_1, 0, 0)$ and $Q_2 = \dcom(s_2, r, 0)$.
 \item Set $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Set $\addr_{\text{in}} = s_1$.
 \item Set $\addr_{\text{full}} = (s_1, s_2, D)$.
@@ -260,9 +265,9 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \begin{enumerate}
 \item Parse the recipient address $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Sample $k \in \F$.
-\item Compute the serial number commitment $S = \com(\hash_{\text{ser}}(kQ_1,Q_1,Q_2), 0) + Q_2$.
-\item Compute the recovery key $K = \com(k, 0)$.
-\item Generate the value commitment $C = \com(v,\hash_{\text{val}}(kQ_1))$.
+\item Compute the recovery key $K = \dcom(k, 0, 0)$.
+\item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(kQ_1,Q_1,Q_2), 0, 0) + Q_2.$$
+\item Generate the value commitment $C = \com(v, \hash_{\text{val}}(kQ_1))$.
 \item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(kQ_1))).$$
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(kQ_1)$; encrypt the value $\overline{v} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$ (if $b=0$) and memo $\overline{m} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m)$.
 \item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \overline{v}, \overline{m})$.
@@ -284,7 +289,7 @@ Notably, the coin value used in this algorithm is assumed to be the sum of all p
 
 \begin{enumerate}
 \item Generate the new coin $\text{CreateCoin}(\addr_{\text{pk}}, v, m, 1) \to \text{Coin} = (S, K, C, v, \overline{m})$.
-\item Generate a value representation proof on the value commitment: $$\Pi_{\text{bal}} = \text{RepProve}(pp_{\text{rep}},F,C - \com(v,0); \hash_{\text{val}}(kQ_1))$$
+\item Generate a value representation proof on the value commitment: $$\Pi_{\text{bal}} = \text{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(kQ_1))$$
 \item Output the tuple $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
 \end{enumerate}
 
@@ -302,7 +307,7 @@ If the coin is not destined for the public address, the algorithm returns failur
 \begin{enumerate}
 \item Parse the incoming view key $\addr_{\text{in}} = s_1$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\com(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0) + Q_2 \neq S$, return failure.
+\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
@@ -320,12 +325,13 @@ If the coin is not destined for the public address, the algorithm returns failur
 \textbf{Outputs:} Coin serial number $s$, tag $T$, value $v$, memo $m$
 
 \begin{enumerate}
-\item Parse the required full view key components as $\addr_{\text{full}} = (s_1, s_2)$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
+\item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D)$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\com(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0) + Q_2 \neq S$, return failure.
+\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=1$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
-\item Compute the serial number $s = \hash_{\text{ser}}(s_1 K,Q_1,Q_2) + s_2$ and tag $T = (1/s)H$.
+\item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K,Q_1,Q_2) + s_2$$ and tag $$T = (1/s)(U - D).$$
+\item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output the tuple $(s, T, v, m)$.
 \end{enumerate}
 
@@ -357,7 +363,7 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
     \item Parse the cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
-        \item Compute the serial number commitment offset: $$S_u' = \com(s_u, -\hash_{\text{ser}'}(s_u, D)) + D$$
+        \item Compute the serial number commitment offset: $$S_u' = \dcom(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
         \item Compute the value commitment offset: $$C_u' = \com(v_u, \hash_{\text{val}'}(s_u, D))$$
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
@@ -369,11 +375,11 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
     \item Parse the output coin value commitments as $\text{OutCoins} = \{\overline{C}_j\}_{j=0}^{t-1}$, where each $\overline{C}_j$ contains a recovery key preimage $k_j$ and destination address component $(Q_1)_j$.
     \item Generate a representation proof for balance assertion:
     \begin{multline*}
-    \Pi_{\text{bal}} = \text{RepProve}\left( pp_{\text{rep}}, F, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
+    \Pi_{\text{bal}} = \text{RepProve}\left( pp_{\text{rep}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
     \left. \sum_{u=0}^{w-1} \hash_{\text{val}'}(s_u,D) - \sum_{j=0}^{t-1} \hash_{\text{val}}(k_j(Q_1)_j) \right)
     \end{multline*}
     \item Let $\mu = \hash_{\text{bind}}( \text{InCoins}, \text{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
-    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \text{ChaumProve}(pp_{\text{chaum}},S_u', T_u; (s_u, r - \hash_{\text{ser}'}(s_u, D)))$$
+    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \text{ChaumProve}(pp_{\text{chaum}},S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D)))$$
     \item Output the tuple:
     \begin{multline*}
     \text{tx}_{\text{spend}} = ( \text{InCoins}, \text{OutCoins}, f, \\
@@ -401,7 +407,7 @@ If the input transaction is a mint transaction:
     \item Parse the transaction $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
     \item Parse the coin value and value commitment as $\text{Coin} = (v, C)$.
     \item Check that $v \in [0,v_{\text{max}})$, and output 0 if this fails.
-    \item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},F,C - \com(v,0))$, and output 0 if this fails.
+    \item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
     \item Output 1.
 \end{enumerate}
 
@@ -416,7 +422,7 @@ If the input transaction is a spend transaction:
     \item Parse the output coin value commitments and range proofs as $\text{OutCoins} = \{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$.
     \item For each $u \in [0,w):$
     \begin{enumerate}
-        \item Check that $T_u$ does not appear in any previously-verified transaction, and output 0 if it does.
+        \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\text{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i - S_u',C_i - C_u'\}_{i=0}^{N-1})$, and output 0 if this fails.
         \item Check that $\text{ChaumVerify}(pp_{\text{chaum}},(\Pi_{\text{chaum}})_u,S_u',T_u)$, and output 0 if this fails.
     \end{enumerate}
@@ -425,7 +431,7 @@ If the input transaction is a spend transaction:
         \item Check that $\text{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
     \end{enumerate}
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
-    \item Check that $$\text{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, F, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
+    \item Check that $$\text{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
     \item Output 1.
 \end{enumerate}
 
@@ -442,7 +448,7 @@ Further, sample a cryptographic hash function $\hash_{\text{agg}}: \{0,1\}^* \to
 \subsection{CreateAddress}
 
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $s_{1,\alpha}, s_{2,\alpha}, r_\alpha \in \F$ uniformly at random, and sets $D_\alpha = \com(0, r_\alpha)$.
+\item Each player $\alpha \in [0,\nu)$ chooses $s_{1,\alpha}, s_{2,\alpha}, r_\alpha \in \F$ uniformly at random, and sets $D_\alpha = \dcom(0, r_\alpha, 0)$.
 It sends the the values $s_{1,\alpha}, s_{2,\alpha}, D_\alpha$ to all players.
 \item All players compute the aggregate incoming view key and full view key components:
 \begin{align*}
@@ -452,8 +458,8 @@ D &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu
 \end{align*}
 \item All players compute the aggregate public address components:
 \begin{align*}
-Q_1 &= \com(s_1, 0) \\
-Q_2 &= \com(s_2, 0) + D
+Q_1 &= \dcom(s_1, 0, 0) \\
+Q_2 &= \dcom(s_2, 0, 0) + D
 \end{align*}
 
 Note that each player $\alpha$ keeps its spend key share $r_\alpha$ private.
@@ -464,26 +470,27 @@ Note that each player $\alpha$ keeps its spend key share $r_\alpha$ private.
 
 Because all players possess the aggregate full view key corresponding to the aggregate public address, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
 We describe now how the signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
-$$pp_{\text{chaum}}, S_u', T_u; (s_u, r - \hash_{\text{ser}'}(s_u, D))$$
+$$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
 
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $\overline{r}_\alpha, \overline{s}_\alpha \in \F$ uniformly at random.
-It generates a commitment to the tuple $(\overline{r}_\alpha, \overline{s}_\alpha F)$ and sends it to all players.
+\item Each player $\alpha \in [0,\nu)$ chooses $\overline{r}_\alpha, \overline{s}_\alpha, \overline{t}_\alpha \in \F$ uniformly at random.
+It generates a commitment to the tuple $(\overline{r}_\alpha, \overline{s}_\alpha G, \overline{t}_\alpha)$ and sends it to all players.
 \item Each player reveals its commitment opening to all players, verifies all players' openings, and aborts if any are invalid.
 \item All players compute the initial proof terms:
 \begin{align*}
-A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) G \\
-A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u \\
-A_3 &= \sum_{\beta=0}^{\nu-1} (\overline{s}_\beta F)
+A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) F + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
+A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
+A_3 &= \left( \sum_{\beta=0}^{\nu-1} \overline{t}_\beta \right) H
 \end{align*}
 They compute the challenge $c$ from the initial proof transcript.
 \item Each player $\alpha \in [0,\nu)$ computes the following:
 \begin{align*}
 t_1 &= \sum_{\beta=0}^{\nu-1} \overline{r}_\beta + cs_u \\
-t_{2,\alpha} &= \overline{s}_\alpha + c\hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) r_\alpha
+t_{2,\alpha} &= \overline{s}_\alpha + c\hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) r_\alpha \\
+t_3 &= \sum_{\beta=0}^{\nu-1} \overline{t}_\beta - c\hash_{\text{ser}'}(s_u, D)
 \end{align*}
 It sends $t_{2,\alpha}$ to all players.
-\item All players compute the final proof term: $$t_2 = \sum_{\beta=0}^{\nu-1} t_{2,\beta} - c\hash_{\text{ser}'}(s_u,D)$$
+\item All players compute the final proof term: $$t_2 = \sum_{\beta=0}^{\nu-1} t_{2,\beta}$$
 \end{enumerate}
 
 
@@ -532,7 +539,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \hline
         $(S',C')$ & & $2w$ & & \\
         $\Pi_{\text{par}}$ & this paper & $(2m + 4)w$ & $[m(n-1) + 4]w$ & \\
-        $\Pi_{\text{chaum}}$ & this paper & $3w$ & $2w$ & \\
+        $\Pi_{\text{chaum}}$ & this paper & $3w$ & $3w$ & \\
         \hline
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
@@ -558,8 +565,8 @@ Table \ref{table:time} shows the verification batch complexity in terms of total
         \hline
         Parallel one-out-of-many & $B[w(2m + 6) + 2m^m] + m^n + 1$ \\
         Bulletproofs+ & $B(t + 2\lg(64t) + 3) + 128T + 2$ \\
-        Schnorr & $B(5w) + 3$ \\
-        Modified Chaum-Pedersen & $B(w + t + 1) + 2$ \\
+        Modified Chaum-Pedersen & $B(5w) + 4$ \\
+        Schnorr & $B(w + t + 1) + 2$ \\
         \hline
     \end{tabular}
 \end{table}
@@ -572,6 +579,7 @@ Initial tests using a variable-time curve library suggest significant reductions
 \section*{Acknowledgments}
 
 The authors thank pseudonymous collaborator \texttt{koe} for ongoing discussions during the development of this work.
+The authors gratefully acknowledge Nikolas Kr\"{a}tzschmar for identifying an earlier protocol flaw relating to tag generation.
 
 
 \bibliographystyle{splncs04}
@@ -584,45 +592,37 @@ The authors thank pseudonymous collaborator \texttt{koe} for ongoing discussions
 \label{app:chaum}
 
 The proving system is a tuple of algorithms $(\text{ChaumProve},\text{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, Y, Z \in \G ; (x, y) \in \F : Y = xG + yF, H = xZ \right\}$$
+$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
 
 The protocol proceeds as follows:
 \begin{enumerate}
-    \item The prover selects random $r,s \in \F$.
-    It computes $$(A_1, A_2, A_3) := (rG, rZ, sF)$$ and sends these values to the verifier.
+    \item The prover selects random $r,s,t \in \F$.
+    It computes $$(A_1, A_2, A_3) := (rF + sG, rT + sG, tH)$$ and sends these values to the verifier.
     \item The verifier selects a random challenge $c \in \F$ and sends it to the prover.
-    \item The prover computes responses $t_1 := r + cx$ and $t_2 := s + cy$, and sends these values to the verifier.
-    \item The verifier accepts the proof if and only if $$A_1 + A_3 + cY = t_1 G + t_2 F$$ and $$A_2 + cH = t_1 Z.$$
+    \item The prover computes responses $$(t_1, t_2, t_3) := (r + cx, s + cy, t + cz)$$ and sends these values to the verifier.
+    \item The verifier accepts the proof if and only if $$A_1 + A_3 + cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
 \end{enumerate}
 
-We now prove that the protocol is complete, special sound if $G$ and $F$ are independent, and special honest-verifier zero knowledge if $G$ and $H$ are independent.
+We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
 
 \begin{proof}
 Completeness of this protocol follows trivially by inspection.
 
 To show the protocol is special honest-verifier zero knowledge, we construct a valid simulator producing transcripts identically distributed to those of valid proofs.
-The simulator chooses a random challenge $c \in \F$, random values $t_1, t_2 \in \F$, and a random value $A_1 \in \G$.
-It sets $A_2 := t_1 Z - cH$ and $A_3 := t_1 G + t_2 F - cY - A_1$.
+The simulator chooses a random challenge $c \in \F$, random scalar values $t_1, t_2, t_3 \in \F$, and a random value $A_1 \in \G$.
+It sets $A_2 := t_1 T + t_2 H - cU$ and $A_3 := t_1 F + t_2 G + t_3 H - cS - A_1$.
 Such a transcript will be accepted by an honest verifier.
-Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H$ are independent, as are transcript elements produced by the simulator.
+Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H,U$ are independent, as are transcript elements produced by the simulator.
 
 To show the protocol is special sound, consider two accepting transcripts with distinct challenge values $c \neq c' \in \F$:
-$$(A_1, A_2, A_3, c, t_1, t_2)$$
+$$(A_1, A_2, A_3, c, t_1, t_2, t_3)$$
 and
-$$(A_1, A_2, A_3, c', t'_1, t'_2)$$
-The first verification equation applied to the two transcripts implies that $(c - c')Y = (t_1 - t'_1)G + (t_2 - t'_2)F$, so we extract the witness values $x := (t_1 - t'_1)/(c - c')$ and $y := (t_2 - t'_2)/(c - c')$, or a nontrivial discrete logarithm relation between $G$ and $F$ (a contradiction if these generators are independent).
-Similarly, the second verification equation implies that $(c - c')H = (t_1 - t'_1)Z$, yielding the same value for $x$ as required.
+$$(A_1, A_2, A_3, c', t'_1, t'_2, t'_3)$$
+The first verification equation applied to the two transcripts implies that $$(c - c')S = (t_1 - t'_1)F + (t_2 - t'_2)G + (t_3 - t'_3)H,$$ so we extract the witness values $x := (t_1 - t'_1)/(c - c')$ and $y := (t_2 - t'_2)/(c - c')$ and $z := (t_3 - t'_3)/(c - c')$, or a nontrivial discrete logarithm relation between $F,G,H$ (a contradiction if these generators are independent).
+Similarly, the second verification equation implies that $$(c - c')U = (t_1 - t'_1)T + (t_2 - t'_2)G,$$ yielding the same values for $x$ and $y$ as required.
 
 This completes the proof.
 \end{proof}
-
-\begin{remark}
-Note that extraction of a valid witness to show special soundness (as opposed to a nontrivial discrete logarithm relation between generators) requires that $G$ and $F$ be independent.
-\end{remark}
-
-\begin{remark}
-Note that transcripts produced by the simulator are indistinguishable from those of real proofs only if $G$ and $H$ are independent.
-\end{remark}
 
 
 \section{Parallel One-out-of-Many Proving System}
@@ -702,9 +702,11 @@ The oracle $\mathcal{O}^{DAP}$ also provides an \text{Insert} query that allows 
 For each security property, we say the DAP satisfies the property if the adversary can win the corresponding game with only negligible probability.
 
 \begin{remark}
-We also require the DAP scheme to be complete, which implies that any unspent coin on the ledger can be spent.
-This property means that if the coin appears on the ledger $L$ as an output of a transaction, a user in possession of the corresponding secret data can generate a valid $\text{Spend}$ transaction consuming it.
-This property immediately follows from the completeness properties of the underlying cryptographic constructions.
+We also require the DAP scheme to be complete, which implies that any unspent coin (with unique partial serial number commitment opening $(s,r,-)$ on the ledger can be spent.
+This property means that if the coin appears on the ledger $L$ as an output of a transaction, but its corresponding tag is not revealed in any valid transaction, then a user in possession of the corresponding address spend key can generate a valid $\text{Spend}$ transaction consuming it.
+
+Note that if the spend key holder cannot produce such a valid transaction, by construction the coin's tag must already appear in a previous valid transaction.
+Such a previous valid transaction must have a modified Chaum-Pedersen proof that extracts, in part, the address's private spend key $r$, a contradiction since the adversary has only a negligible advantage in discrete logarithm extraction.
 \end{remark}
 
 
@@ -731,7 +733,7 @@ In that case where $\text{tx}_i$ was produced by a query from $\mathcal{A}$ to t
 If instead $\text{tx}_i$ was produced by a direct $\text{Insert}$ query from $\mathcal{A}$, $a_i$ consists of all extracted witness data from proofs contained in the transaction.
 The resulting augmented ledger $(L, \vec{a})$ is balanced if the following conditions are true:
 \begin{enumerate}
-    \item\label{cond:distinct} Each valid spend transaction $\text{tx}_{\text{spend},k}$ in $(L, \vec{a})$ consumes distinct coin serial/value commitment pairs, and each consumed coin is the output of a valid $\text{tx}_{\text{mint},i}$ or $\text{tx}_{\text{spend},j}$ transaction for some $i < k$ or $j < k$.
+    \item\label{cond:distinct} Each valid spend transaction $\text{tx}_{\text{spend},k}$ in $(L, \vec{a})$ consumes distinct coins, and each consumed coin is the output of a valid $\text{tx}_{\text{mint},i}$ or $\text{tx}_{\text{spend},j}$ transaction for some $i < k$ or $j < k$.
     This requirement implies that all transactions spend only valid coins, and that no coin is spent more than once within the same valid transaction.
     
     \item\label{cond:multiple} No two valid spend transactions in $(L, \vec{a})$ consume the same coin.
@@ -765,16 +767,19 @@ By way of contradiction, assume the adversary $\mathcal{A}$ interacts with $\mat
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:distinct}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition 1 is non-negligible.
 Each $\text{tx}_{\text{spend}}$ generated by a non-$\text{Insert}$ oracle query satisfies this condition already, so there must exist a transaction $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ inserted by $\mathcal{A}$.
 
-Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin with serial number commitment $S$.
-Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields extractions $x_{u_1}$ and $x_{u_2}$ such that $S - S_{u_1}' = x_{u_1} F$ and $S - S_{u_2}' = x_{u_2} F$ for the serial number commitment offsets $S_{u_1}'$ and $S_{u_2}'$, respectively.
-Validity of the modified Chaum-Pedersen proofs $(\Pi_{\text{chaum}})_{u_1}$ and $(\Pi_{\text{chaum}})_{u_2}$ give extracted openings $S_{u_1}' = s_{u_1} G + r_{u_1} F$ and $S_{u_2}' = s_{u_2} G + r_{u_2} F$ and tag representations $T_{u_1} = (1/s_{u_1})H$ and $T_{u_2} = (1/s_{u_2})H$.
-This implies $$S = s_{u_1}G + (r_{u_1} + x_{u_1})F = s_{u_2}G + (r_{u_2} + x_{u_2})F$$ represents two openings of $S$.
-However, transaction validity means $T_{u_1} \neq T_{u_2}$, and injectivity of the tag construction asserts $s_{u_1} \neq s_{u_2}$.
-Hence we have distinct openings of $S$, which contradicts the binding property of the underlying commitment scheme.
+Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin; that is, reveal the same partial opening $(s,r,-)$ of coin serial number commitments.
+Validity of the modified Chaum-Pedersen proofs $(\Pi_{\text{chaum}})_{u_1}$ and $(\Pi_{\text{chaum}})_{u_2}$ for these inputs gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
+Because transaction validity implies $T_{u_1} \neq T_{u_2}$, we must have $(s_{u_1},r_{u_1}) \neq (s_{u_2},r_{u_2})$.
+Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to input set group elements $S_1$ and $S_2$) and discrete logarithm extractions such that $S_1 - S_{u_1}' = x_{u_1} H$ and $S_2 - S_{u_2}' = x_{u_2} H$.
+This means
+$$S_1 = \dcom(s_{u_1},r_{u_1},x_{u_1}+y_{u_1})$$
+and
+$$S_2 = \dcom(s_{u_2},r_{u_2},x_{u_2}+y_{u_2})$$
+which contradicts the assumption of unique partial openings for consumed coin serial number commitments.
 
 The second possibility for violation of the condition is that the transaction $\text{tx}_{\text{spend}}$ consumes a coin that is not generated in any previous valid transaction.
-Validity of the modified Chaum-Pedersen proof for such an input gives a tag representation $T = (1/s)H$ and serial number commitment offset $S' = sG + rF$.
-Validity of the parallel one-out-of-many proof for the input gives an index $l$ such that $S_l - S' = xF$, meaning $S_l = sG + (r + x)F$ is an opening of this commitment.
+Validity of the modified Chaum-Pedersen proof for such an input gives a tag representation $U = sT + rG$ and serial number commitment offset $S' = sF + rG + yH$.
+Validity of the parallel one-out-of-many proof for the input gives an index $l$ such that $S_l - S' = xH$, meaning $S_l = sF + rG + (x + y)H$ is an opening of this commitment.
 Because transaction validity requires all input ambiguity set elements to be produced in previous valid transactions as valid commitments, the adversary knows an opening of such a commitment, which is a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:multiple}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:multiple} is non-negligible.
@@ -783,27 +788,29 @@ Similarly to the previous argument, this implies distinct openings of the coin s
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:value}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:value} is non-negligible.
 Let $C$ be the value commitment of the coin consumed by an input of $\text{tx}_{\text{spend}}$ and generated in a previous transaction (of either type) in $(L, \vec{a})$.
-Since the generating transaction is valid, we have an extracted opening $C = vG + aF$ from either the balance proof (in a \text{Mint} transasction) or the range proof (in a \text{Spend} transaction).
-Validity of the corresponding parallel one-out-of-many proof in $\text{tx}_{\text{spend}}$ gives an extracted discrete logarithm $C - C' = xF$, where $C'$ is the input's value commitment offset.
-But this immediately gives $C' = vG + (a - x)F$, a contradiction since the commitment scheme is binding.
+Since the generating transaction is valid, we have an extracted opening $C = vG + aH$ from either the balance proof (in a \text{Mint} transasction) or the range proof (in a \text{Spend} transaction).
+Validity of the corresponding parallel one-out-of-many proof in $\text{tx}_{\text{spend}}$ gives an extracted discrete logarithm $C - C' = xH$, where $C'$ is the input's value commitment offset.
+But this immediately gives $C' = vG + (a - x)H$, a contradiction since the commitment scheme is binding.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:balance}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:balance} is non-negligible.
 If the augmented ledger $(L, \vec{a})$ contains a \text{Spend} transaction that violates the balance equation, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, which is a contradiction.
 If instead the augmented ledger $(L, \vec{a})$ contains a \text{Mint} transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, again a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:honest}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:honest} is non-negligible.
-That is, $\mathcal{A}$ produces a \text{Spend} transaction $\text{tx}_{\text{spend}}$ by an \text{Insert} question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin can be recovered by a public address $(Q_1, Q_2) \in \text{ADDR}$.
-Let $(s_1,s_2,r)$ be the secret key corresponding to this address.
-Since $\text{tx}_{\text{spend}}$ can be recovered by this honest address, the serial number commitment for the consumed coin is of the form
+That is, $\mathcal{A}$ produces a \text{Spend} transaction $\text{tx}_{\text{spend}}$ by an \text{Insert} question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_1, Q_2) \in \text{ADDR}$.
+
+Validity of the Chaum-Pedersen proof corresponding to this input of $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
+Validity of the corresponding parallel one-of-many proof gives a serial number commitment $S$ and extraction such that $S - S' = xH$, so $S = s'F + r'G + (x + y)H$.
+
+Now let $(s_1,s_2,r)$ be the secret key corresponding to the address $(Q_1,Q_2)$.
+Since $\text{tx}_{\text{spend}}$ consumes a coin recoverable by this address, a serial number commitment for the recovered coin is
 \begin{align*}
-S =& \hash_{\text{ser}}(s_1 K, Q_1, Q_2)G + Q_2 \\
-=& (\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)G + rF
+\overline{S} &= \hash_{\text{ser}}(s_1 K, Q_1, Q_2)F + Q_2 \\
+&= (\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)F + rG
 \end{align*}
 for recovery key $K$.
-Validity of the parallel one-out-of-many proof corresponding to $S$ gives an extraction $x$ such that $S - S' = xF$, where $S'$ is the serial number commitment offset.
-Hence $$S' = (\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)G + (r - x)F$$ and the corresponding tag (via validity of the modified Chaum-Pedersen proof) is $$T = 1/(\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)H.$$
 
-Since we can model $\hash_{\text{ser}}$ as a random oracle, $\mathcal{A}$ has produced an opening to $S'$ and a discrete logarithm to $T$, but did not produce the secret key $(s_1,s_2,r)$ corresponding to the public address $(Q_1,Q_2)$, a contradiction.
+Since the commitment scheme is binding, we must therefore have $r' = r$, which is a contradiction since $\mathcal{A}$ cannot extract this discrete logarithm from the public address.
 
 This completes the proof.
 \end{proof}
@@ -844,11 +851,10 @@ Therefore, in order to produce valid $\text{tx}' \neq \text{tx}$, we consider tw
 In the first case, at least one input to the binding hash $\hash_{\text{bind}}$ used to initialize the modified Chaum-Pedersen transcripts must differ between the proofs.
 Because we model this hash function as a random oracle, the outputs differ except with negligible probability, a contradiction since the resulting proof structures must be identical.
 
-In the second case, validity of the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}'$ contained in $\text{tx}'$ leads to an extraction of an opening of the serial number commitment offset $S' = sG + rF$.
-Further, validity of the parallel one-out-of-many proof $\Pi_{\text{par}}'$ contained in the transaction yields an index $l$ and discrete logarithm extraction such that $S_l = sG + (r + x)F$, where $S_l$ is contained in $\text{InCoins}$.
-However, $S_l$ was generated in a transaction in $L'$ preceding $\text{tx}$, and contains either a proof of representation (if generated in a \text{Mint} transaction) or range proof (if generated in a \text{Spend} transaction) that asserts its representation with respect to the generators $G,F$ is unique up to the binding property of the commitment scheme.
-
-However, the adversary does not know the opening of $S_l$ (since it was generated by the oracle), and the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ from $\text{tx}$ authorizing the spend of $S_l$ is special honest-verifier zero knowledge, the adversary can only produce its valid proof $\Pi_{\text{chaum}}$ with negligible probability, a contradiction.
+In the second case, suppose that the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}'$ contained in $\text{tx}'$ yields extraction $(s',r',y')$, and that the proof $\Pi_{\text{chaum}}$ contained in $\text{tx}$ yields $(s,r,y)$.
+Since the corresponding tags are identical, we must have $s' = s$ and $r' = r$.
+Any serial number commitment $S$ with a partial opening $(s,r,-)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component of the controlling public address $(Q_1,Q_2)$.
+Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or the $(Q_1,Q_2)$, which implies a non-negligible discrete logarithm advantage, a contradiction.
 \end{proof}
 
 
@@ -914,7 +920,7 @@ Depending on the query type, the challenger acts as follows:
             \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
             \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}.$$
         \end{enumerate}
-        \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $(C - \com(v,0)$.
+        \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $(C - \com(v,0))$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
     \end{enumerate}
     \item Answering \text{Spend} queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $w$ is the number of consumed coins and $t$ the number of generated coins specified by $\mathcal{A}$ as part of its queries:
