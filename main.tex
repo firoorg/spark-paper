@@ -115,8 +115,8 @@ Let $pp_{\text{par}} = (\G, \F, n, m, pp_{\text{com}})$ be the public parameters
 
 The proving system itself is a tuple of algorithms $(\text{ParProve},\text{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2 ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l = \com(0,s), V_l = \com(0,v) \right\}
+\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
 We present an instantiation of such a proving system in Appendix \ref{app:parallel}.
@@ -403,7 +403,7 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
         \item Compute the value commitment offset: $$C_u' = \com(v_u, \hash_{\text{val}'}(s_u, D))$$
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
-        (\Pi_{\text{par}})_u = \text{ParProve}(pp_{\text{par}},\{S_i - S_u', C_i - C_u'\}_{i=0}^{N-1}; \\
+        (\Pi_{\text{par}})_u = \text{ParProve}(pp_{\text{par}},\{S_i, C_i\}_{i=0}^{N-1}, S_u',C_u'; \\
         (l_u, \hash_{\text{ser}'}(s_u, D), \hash_{\text{val}}(s_1 K_u) - \hash_{\text{val}'}(s_u, D)))
         \end{multline*}
     \end{enumerate}
@@ -459,7 +459,7 @@ If the input transaction is a spend transaction:
     \item For each $u \in [0,w):$
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
-        \item Check that $\text{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i - S_u',C_i - C_u'\}_{i=0}^{N-1})$, and output 0 if this fails.
+        \item Check that $\text{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
         \item Check that $\text{ChaumVerify}(pp_{\text{chaum}},(\Pi_{\text{chaum}})_u,S_u',T_u)$, and output 0 if this fails.
     \end{enumerate}
     \item For each $j \in [0,t)$, check that $\text{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
@@ -666,56 +666,46 @@ This completes the proof.
 
 The proving system itself is a tuple of algorithms $(\text{ParProve},\text{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2 ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l = \com(0,s), V_l = \com(0,v) \right\}
+\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
-The protocol is shown in Figure \ref{fig:groth}, where we use the notation of \cite{lelantus}.
-
-\begin{figure}
-\centering
-\begin{math}
-\begin{array}{@{}l@{}c@{}l@{}}
-\displaystyle \text{ParProve}\left(pp_{\text{par}}, \{S_i, V_i\}_{i=0}^{N-1}; (l,s,v)\right) && \text{ParVerify}\left(pp_{\text{par}}, \{S_i, V_i\}_{i=0}^{N-1}\right) \\\\
-\text{Compute:} && \text{Accept if and only if:}\\
-r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \gets_R \F\\
-\forall j \in [0,m) \\
-\qquad a_{j,0} = -\sum _{i=1}^{n-1}a_{j,i}\\\\
-A \equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
-B \equiv \com(\{\sigma_{l_{j},i}\}_{j,i=0}^{m-1,n-1}, r_B) \\
-C \equiv \\ \quad \com(\lbrace a_{j,i}(1-2\sigma_{l_j,i})\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
-D \equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D) \\\\
-\forall j \in [0,m) &    \\
-\qquad \rho^S_j, \rho^V_j \gets_R \F &\\\\
-
-\qquad G^V_j \equiv \sum_{i=0}^{N-1}p_{i,j}V_i + \com(0, \rho^V_j )    &  A,B,C,D, & \\
-\qquad G^S_j \equiv \sum_{i=0}^{N-1}p_{i,j}S_i + \com(0, \rho^S_j)& \lbrace G^S_j, G^V_j \rbrace_{j=0}^{m-1} \\
-\qquad \qquad \text{(computing } p_{i,j}  & \xrightarrow{\qquad \qquad \qquad} & A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1} \in \G \\
-\qquad \qquad \text{ as in the orig. paper) } \\
-
-
-\forall j \in [0,m), i \in [1,n) & \xleftarrow{x \gets \lbrace 0,1 \rbrace^\lambda} &  \\
-\qquad f_{j,i} \equiv \sigma_{l_{j}i}x + a_{j,i} &&  \\
-z_A = r_B x + r_A & \\
-z_C = r_C x + r_D & \{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}\\
-z_S = sx^m -  \sum_{j=0}^{m-1}\rho^S_j x^j & z_A, z_C, z_S, z_V & \lbrace f_{j,i}\rbrace_{j,i =0,1}^{m-1,n-1} \in \F \\
-z_V = vx^m - \sum_{j=0}^{m-1}\rho^V_h x^j &\xrightarrow{ \qquad \qquad } & z_A, z_C, z_V, z_R \in \F  \\
-
-&& \forall j: f_{j,0} := x - \sum_{i=0}^{n-1} f_{j,i} \\\\
-&& D+xC =  \\
-&& \com( \lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}; z_C) \\
-&& A+xB =  \\
-&& \com( \lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1};z_A) \\\\
-&& \sum_{i=0}^{N-1}\overline{f}_i S_i - \sum_{j=0}^{m-1} x^j G^S_j \\
-&& \qquad \qquad = \com(0, z_S) \\
-& & \sum_{i=0}^{N-1}\overline{f}_i V_i - \sum_{j=0}^{m-1} x^j G^V_j \\
-& & \qquad \qquad = \com(0, z_V) \\
-&&  \text{where } \overline{f}_i \equiv \prod_{j=0}^{m-1} f_{j,i_j}
-\end{array}
-\end{math}
-\caption{Parallel one-out-of-many protocol}
-\label{fig:groth}
-\end{figure}
+The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
+\begin{enumerate}
+    \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=0}^{m-1,n-1} \in \F$$ uniformly at random, and uses these values to compute the following:
+    \begin{align*}
+        A &\equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
+        B &\equiv \com(\{\sigma_{l_{j},i}\}_{j,i=0}^{m-1,n-1}, r_B) \\
+        C &\equiv \com(\lbrace a_{j,i}(1-2\sigma_{l_j,i})\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
+        D &\equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
+    \end{align*}
+    \item For each $j \in [0,m)$, the prover selects $\rho^S_j, \rho^V_j \in \F$ uniformly at random, and computes the following:
+    \begin{align*}
+        G^S_j &\equiv \sum_{i=0}^{N-1}p_{i,j}(S_i - S') + \com(0, \rho^S_j) \\
+        G^V_j &\equiv \sum_{i=0}^{N-1}p_{i,j}(V_i - V') + \com(0, \rho^V_j)
+    \end{align*}
+    \item The prover sends $A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1}$ to the verifier.
+    \item The verifier selects $x \in \F$ uniformly at random and sends it to the prover.
+    \item For each $j \in [0,m)$ and $i \in [1,n)$, the prover computes $f_{j,i} \equiv \sigma_{l_{j},i}x + a_{j,i}$ and the following values:
+    \begin{align*}
+        z_A &\equiv r_A + xr_B \\
+        z_C &\equiv xr_C + r_D \\
+        z_S &\equiv sx^m -  \sum_{j=0}^{m-1}\rho^S_j x^j \\
+        z_V &\equiv vx^m - \sum_{j=0}^{m-1}\rho^V_j x^j
+    \end{align*}
+    \item The prover sends $\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}, z_A, z_C, z_S, z_V$ to the verifier.
+    \item For each $j \in [0,m)$, the verifier sets $f_{j,0} \equiv x - \sum_{i=1}^{n-1} f_{j,i}$ and accepts the proof if and only if
+    \begin{align*}
+        A + xB &= \com(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, z_A) \\
+        xC + D &= \com(\lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z_C) \\
+    \end{align*}
+    and
+    \begin{align*}
+        \sum_{i=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,i_j}\right)(S_i - S') - \sum_{j=0}^{m-1} x^jG^S_j &= \com(0, z_S) \\
+        \sum_{i=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,i_j}\right)(V_i - V') - \sum_{j=0}^{m-1} x^jG^V_j &= \com(0, z_V)
+    \end{align*}
+    are true.
+\end{enumerate}
 
 This protocol is complete, special sound, and special honest-verifier zero knowledge; the proof is essentially the same as in the original construction, with only minor straightforward modifications.
 
@@ -982,7 +972,7 @@ Depending on the query type, the challenger acts as follows:
         \begin{enumerate}
             \item Samples a tag $T_u$ uniformly at random.
             \item Samples a serial number commitment offset $S_u'$ and value commitment offset $C_u'$ uniformly at random.
-            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_i - S_u', C_i - C_u'\}_{i=0}^{N-1})$.
+            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_i, C_i\}_{i=0}^{N-1},S_u',C_u')$.
         \end{enumerate}
         \item For each $j \in [0,t)$:
         \begin{enumerate}
