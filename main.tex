@@ -154,9 +154,11 @@ In practice, an efficient instantiation like Bulletproofs \cite{bp} or Bulletpro
 
 We now define the main concepts and algorithms used in the Spark transaction protocol.
 
-\textbf{Addresses}. Users generate addresses that enable transactions.
-An address consists of a tuple $$(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}}).$$
-For each address, $\addr_{\text{pk}}$ is the public address used for receiving funds, $\addr_{\text{in}}$ is an incoming view key used to identify received funds, $\addr_{\text{full}}$ is a full view key used to identify outgoing funds and conduct computationally-heavy proving operations, and $\addr_{\text{sk}}$ is the spend key used to generate transactions.
+\textbf{Keys and addresses}. Users generate keys and addresses that enable transactions.
+A set of keys consists of a tuple $$(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}}).$$
+In this notation, $\addr_{\text{base}}$ is a base key used to derive public addresses for receiving funds, $\addr_{\text{in}}$ is an incoming view key used to identify received funds, $\addr_{\text{full}}$ is a full view key used to identify outgoing funds and conduct computationally-heavy proving operations, and $\addr_{\text{sk}}$ is the spend key used to generate transactions.
+Spark addresses are constructed in such a way that a single set of keys can be used to construct any number of \textit{diversified} public addresses that appear indistinguishable from each other or from public addresses produced from a different set of keys.
+Diversified addressing allows a recipient to provide distinct public addresses to different senders, but scan transactions on chain only once for identification and recovery of incoming coins destined for any of its diversified public addresses.
 
 \textbf{Coins.} A coin encodes the abstract value which is transferred through the private transactions. Each coin is associated with:
 \begin{itemize}
@@ -168,9 +170,8 @@ For each address, $\addr_{\text{pk}}$ is the public address used for receiving f
 \item A range proof for the value commitment, or a proof that a plaintext value is represented by the value commitment.
 \item A memo with arbitrary recipient data.
 \item An encrypted memo intended for decryption by the recipient.
-\item A recovery key used by the recipient to identify the coin and decrypt private data.
+\item A recovery key used by the recipient to identify the coin and decrypt private data, and a proof of representation of this key (for use by the recipient).
 \end{itemize}
-Coins additionally bind recipient addresses in an indistinguishable way; this may be useful for out-of-band payment proofs that require such binding.
 
 \textbf{Private Transactions}. There are two types of private transactions in Spark:
 \begin{itemize}
@@ -193,11 +194,12 @@ Tags are bound to validly-recoverable coins uniquely via the serial number commi
 \begin{itemize}
 \item \textbf{Setup}: This algorithm outputs all public parameters used by the protocol and its underlying components.
 The setup process does not require any trusted parameter generation.
-\item \textbf{CreateAddress}: This algorithm outputs a public address, incoming view key, full view key, and spend key.
+\item \textbf{CreateKeys:} This algorithm outputs a base key, incoming view key, full view key, and spend key.
+\item \textbf{CreateAddress}: This algorithm takes as input an incoming view key and diversifier index, and outputs a public address.
 \item \textbf{CreateCoin}: This algorithm takes as input a public address, coin value, and memo, and outputs a coin destined for the public address.
-\item \textbf{Mint:} This algorithm takes as input a public address, value, and (optionally) implementation-specific data relating to base-layer outputs, and outputs a mint transaction $\text{tx}_{\text{mint}}$.
-\item \textbf{Identify:} This algorithm takes as input a coin and an incoming view key, and outputs the coin value and memo.
-\item \textbf{Recover:} This algorithm takes as input a coin and a full view key, and outputs the coin value, memo, serial number, and tag.
+\item \textbf{Mint:} This algorithm takes as input a public address, value, and (optionally) implementation-specific data relating to base-layer funds, and outputs a mint transaction $\text{tx}_{\text{mint}}$.
+\item \textbf{Identify:} This algorithm takes as input an incoming view key and coin, and outputs the coin value and memo if the coin is controlled by the key.
+\item \textbf{Recover:} This algorithm takes as input a full view key and coin, and outputs the coin value, memo, serial number, and tag if the coin is controlled by the key.
 \item \textbf{Spend:} This algorithm takes as input a full view key, a spend key, a set of input coins (including coins used as a larger ambiguity set), the indexes of coins to be spent, the corresponding serial numbers and values, a fee value, and a set of output coins to be generated, and outputs a spend transaction $\text{tx}_{\text{spend}}$.
 \item \textbf{Verify:} This algorithm accepts either a mint transaction or a spend transaction, and outputs a bit to assess validity.
 \end{itemize}
@@ -223,7 +225,7 @@ In our setup the public parameters $pp$ are comprised of the corresponding publi
 Let $\F$ be the scalar field of $\G$.
 \item Sample $F,G,H,U \in \G$ uniformly at random.
 In practice, these generators may be chosen using a suitable cryptographic hash function on public input.
-\item Sample cryptographic hash functions $$\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
+\item Sample cryptographic hash functions $$\hash_{Q_0},\hash_{Q_2},\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
 In practice, these hash functions may be chosen using domain separation of a single suitable cryptographic hash function.
 \item Compute the public parameters $pp_{\text{com}} = (\G,\F,G,H)$ of a Pedersen commitment scheme.
 \item Compute the public parameters $pp_{\text{dcom}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
@@ -236,23 +238,50 @@ In practice, these hash functions may be chosen using domain separation of a sin
 \end{enumerate}
 
 
-\subsection{CreateAddress}
+\subsection{CreateKeys}
 
-We describe the construction of all addresses and underlying key types used in the protocol.
+We describe the construction of key types used in the protocol.
 
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$
 
-\textbf{Outputs:} Address key tuple $(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
+\textbf{Outputs:} Key tuple $(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
 
 \begin{enumerate}
 \item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \dcom(0, r, 0)$.
-\item Compute $Q_1 = \dcom(s_1, 0, 0)$ and $Q_2 = \dcom(s_2, r, 0)$.
-\item Set $\addr_{\text{pk}} = (Q_1, Q_2)$.
-\item Set $\addr_{\text{in}} = s_1$.
-\item Set $\addr_{\text{full}} = (s_1, s_2, D)$.
+\item Compute $P_1 = \dcom(s_1, 0, 0)$ and $P_2 = \dcom(s_2, r, 0)$.
+\item Set $\addr_{\text{base}} = (P_1, P_2)$.
+\item Set $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Set $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
 \item Set $\addr_{\text{sk}} = (s_1, s_2, r)$.
-\item Output the tuple $(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$.
+\item Initialize an empty hash table $\text{AddrTable}$.
+\item Output the tuple $(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}})$.
 \end{enumerate}
+Note that the base key $\addr_{\text{base}}$ is an internal data structure, and is not provided to senders or otherwise exposed to the user.
+Rather, it is used for producing diversified addresses, which are described below.
+
+
+\subsection{CreateAddress}
+
+This algorithm generates a \textit{diversified} public address from an incoming view key.
+A given public address is privately and deterministically tied to an index called the \textit{diversifier}.
+Diversified public addresses share the same set of keys for efficiency purposes, but are not linkable without external information.
+
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, diversifier $i \in \mathbb{N}$
+
+\textbf{Outputs:} Diversified address $\addr_{\text{pk}}$
+
+\begin{enumerate}
+\item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Compute the diversified address components:
+\begin{align*}
+Q_{0,i} &= \dcom(\hash_{Q_0}(s_1,i),0,0) \\
+Q_{1,i} &= s_1 Q_{0,i} \\
+Q_{2,i} &= \dcom(\hash_{Q_2}(s_1,i),0,0) + P_2
+\end{align*}
+\item Add a mapping entry $Q_{2,i} \mapsto i$ in $\text{AddrTable}$ if it does not already exist.
+\item Set $\addr_{\text{pk}} = (Q_{0,i},Q_{1,i},Q_{2,i})$ and output this tuple.
+\end{enumerate}
+Note that we drop the diversifier index $i$ from subsequent notation when referring to addresses in operations performed by entities other than the address holder, since such users are not provided this index and cannot compute it.
 
 
 \subsection{CreateCoin}
@@ -265,18 +294,23 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \textbf{Outputs:} Coin public key $S$, recovery key $K$, value commitment $C$, value commitment range proof $\Pi_{\text{rp}}$ (if $b=0$), encrypted value $\overline{v}$ (if $b=0$) or value $v$ (if $b=1$), encrypted memo $\overline{m}$
 
 \begin{enumerate}
-\item Parse the recipient address $\addr_{\text{pk}} = (Q_1, Q_2)$.
+\item Parse the recipient address $\addr_{\text{pk}} = (Q_0, Q_1, Q_2)$.
 \item Sample $k \in \F$.
-\item Compute the recovery key $K = \dcom(k, 0, 0)$.
-\item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(kQ_1,Q_1,Q_2), 0, 0) + Q_2.$$
-\item Generate the value commitment $C = \com(v, \hash_{\text{val}}(kQ_1))$.
-\item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(kQ_1))).$$
-\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(kQ_1)$; encrypt the value $\overline{v} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$ (if $b=0$) and memo $\overline{m} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m)$.
-\item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \overline{v}, \overline{m})$.
-Otherwise, output the tuple $(S, K, C, v, \overline{m})$.
+\item Compute the recovery key $K = kQ_0$ and derived recovery key $K_{\text{der}} = kQ_1$.
+\item Generate a representation proof $$\Pi_{\text{rec}} = \text{RepProve}(pp_{\text{rep}},Q_0,K ; k)$$ that also binds the value $K_{\text{der}}$ to the proof transcript.
+\item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(K_{\text{der}}), 0, 0) + Q_2.$$
+\item Generate the value commitment $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$.
+\item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(K_{\text{der}}))).$$
+\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(K_{\text{der}})$; encrypt the value $\overline{v} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$ (if $b=0$) and memo $\overline{m} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m)$.
+\item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \Pi_{\text{rec}}, \overline{v}, \overline{m})$.
+Otherwise, output the tuple $(S, K, C, \Pi_{\text{rec}}, v, \overline{m})$.
 \end{enumerate}
 The case $b=0$ represents a coin with hidden value being generated in a $\text{Spend}$ transaction, while the case $b=0$ represents a coin with plaintext value being generated in a $\text{Mint}$ transaction.
 Note that it is possible to securely aggregate range proofs within a transaction; this does not affect protocol security.
+
+We further note the construction of the recovery key representation proof $\Pi_{\text{rec}}$.
+This proof asserts that the recovery key $K$ is well-formed with respect to the address component $Q_0$, which is not included in the coin data structure.
+We wish to avoid the case where a third party tests this proof against candidate addresses until the proof verifies correctly; to do so, we bind the derived recovery key $K_{\text{der}}$, which is a Diffie-Hellman shared secret only computable by the sender and recipient, into the proof transcript.
 
 
 \subsection{Mint}
@@ -291,25 +325,27 @@ Notably, the coin value used in this algorithm is assumed to be the sum of all p
 
 \begin{enumerate}
 \item Generate the new coin $\text{CreateCoin}(\addr_{\text{pk}}, v, m, 1) \to \text{Coin} = (S, K, C, v, \overline{m})$.
-\item Generate a value representation proof on the value commitment: $$\Pi_{\text{bal}} = \text{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(kQ_1))$$
+\item Generate a value representation proof on the value commitment, using the derived recovery key $K_{\text{der}}$ computed internally during coin creation: $$\Pi_{\text{bal}} = \text{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(K_{\text{der}}))$$
 \item Output the tuple $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
 \end{enumerate}
 
 
 \subsection{Identify}
 
-This algorithm allows a recipient (or designated entity) to compute the value and memo from a coin destined for its public address.
-It requires the incoming view key corresponding to the public address to do so.
-If the coin is not destined for the public address, the algorithm returns failure.
+This algorithm allows a recipient (or designated entity) to compute the value and memo from a coin destined for any diversified address it has produced.
+It requires the incoming view key corresponding to the base public address to do so, as well as the hash table $\text{AddrTable}$ generated when originally producing addresses.
+If the coin is not destined for a known diversified address, the algorithm returns failure.
 
-\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, public address $\addr_{\text{pk}}$, coin $\text{Coin}$.
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, coin $\text{Coin}$, address table $\text{AddrTable}$
 
 \textbf{Outputs:} Value $v$, memo $m$
 
 \begin{enumerate}
-\item Parse the incoming view key $\addr_{\text{in}} = s_1$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
+\item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
+\item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
+\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
@@ -318,21 +354,23 @@ If the coin is not destined for the public address, the algorithm returns failur
 
 \subsection{Recover}
 
-This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for its public address.
-It requires the full view key corresponding to the public address to do so.
-If the coin is not destined for the public address, the algorithm returns failure.
+This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for any diversified address it has produced.
+It requires the full view key corresponding to the base public address to do so, as well as the hash table $\text{AddrTable}$ generated when originally producing addresses.
+If the coin is not destined for a known diversified address, the algorithm returns failure.
 
-\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, full view key $\addr_{\text{full}}$, public address $\addr_{\text{pk}}$, coin $\text{Coin}$.
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, full view key $\addr_{\text{full}}$, address table $\text{AddrTable}$, coin $\text{Coin}$.
 
 \textbf{Outputs:} Coin serial number $s$, tag $T$, value $v$, memo $m$
 
 \begin{enumerate}
-\item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D)$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
+\item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=1$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
+\item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
+\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ using the diversifier $i$, and return failure otherwise.
+\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
-\item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K,Q_1,Q_2) + s_2$$ and tag $$T = (1/s)(U - D).$$
+\item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output the tuple $(s, T, v, m)$.
 \end{enumerate}
@@ -340,7 +378,7 @@ If the coin is not destined for the public address, the algorithm returns failur
 
 \subsection{Spend}
 
-This algorithm allows a recipient to generate a transaction that consumes coins destined to its public address, and generates new coins destined for arbitrary public addresses.
+This algorithm allows a recipient to generate a transaction that consumes coins it controls, and generates new coins destined for arbitrary public addresses.
 The process is designed to be modular; in particular, only the full view key is required to generate the parallel one-out-of-many proof, which may be computationally expensive.
 The use of spend keys is only required for the final Chaum-Pedersen proof step, which is of lower complexity.
 
@@ -360,9 +398,9 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
 \textbf{Outputs:} Spend transaction $\text{tx}_{\text{spend}}$
 
 \begin{enumerate}
-    \item Parse the required full view key component as $\addr_{\text{full}} = D$.
+    \item Parse the required full view key component $D$ from $\addr_{\text{full}}$.
     \item Parse the spend key $\addr_{\text{sk}} = (s_1, s_2, r)$.
-    \item Parse the cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
+    \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\text{InCoins}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
         \item Compute the serial number commitment offset: $$S_u' = \dcom(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
@@ -374,7 +412,7 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
         \end{multline*}
     \end{enumerate}
     \item Generate a set $\text{OutCoins} = \{\text{CreateCoin}(\addr_{\text{pk},j}, v_j, m_j, 0)\}_{j=0}^{t-1}$ of output coins.
-    \item Parse the output coin value commitments as $\text{OutCoins} = \{\overline{C}_j\}_{j=0}^{t-1}$, where each $\overline{C}_j$ contains a recovery key preimage $k_j$ and destination address component $(Q_1)_j$.
+    \item Parse the output coin value commitments $\{\overline{C}_j\}_{j=0}^{t-1}$ from $\text{OutCoins}$, where each $\overline{C}_j$ contains a recovery key preimage $k_j$ and destination address component $(Q_1)_j$.
     \item Generate a representation proof for balance assertion:
     \begin{multline*}
     \Pi_{\text{bal}} = \text{RepProve}\left( pp_{\text{rep}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
@@ -407,7 +445,7 @@ This algorithm assesses the validity of a transaction.
 If the input transaction is a mint transaction:
 \begin{enumerate}
     \item Parse the transaction $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
-    \item Parse the coin value and value commitment as $\text{Coin} = (v, C)$.
+    \item Parse the coin value and value commitment $(v, C)$ from $\text{Coin}$.
     \item Check that $v \in [0,v_{\text{max}})$, and output 0 if this fails.
     \item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
     \item Output 1.
@@ -420,18 +458,15 @@ If the input transaction is a spend transaction:
     \text{tx}_{\text{spend}} = ( \text{InCoins}, \text{OutCoins}, f, \\
     \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, (\Pi_{\text{chaum}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
-    \item Parse the cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
-    \item Parse the output coin value commitments and range proofs as $\text{OutCoins} = \{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$.
+    \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\text{InCoins}$.
+    \item Parse the output coin value commitments and range proofs $\{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\text{OutCoins}$.
     \item For each $u \in [0,w):$
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\text{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i - S_u',C_i - C_u'\}_{i=0}^{N-1})$, and output 0 if this fails.
         \item Check that $\text{ChaumVerify}(pp_{\text{chaum}},(\Pi_{\text{chaum}})_u,S_u',T_u)$, and output 0 if this fails.
     \end{enumerate}
-    \item For each $j \in [0,t):$
-    \begin{enumerate}
-        \item Check that $\text{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
-    \end{enumerate}
+    \item For each $j \in [0,t)$, check that $\text{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
     \item Check that $$\text{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
     \item Output 1.
@@ -441,13 +476,13 @@ If the input transaction is a spend transaction:
 \section{Multisignature Operations}
 
 Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
-We describe a method for signing groups to perform the $\text{CreateAddress}$ and $\text{Spend}$ algorithms to produce multisignature addresses and spend transactions indistinguishable from others.
+We describe a method for signing groups to perform the $\text{CreateKeys}$ and $\text{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
 
 Throughout this section, suppose we have a group of $\nu$ signers who wish to collaboratively produce an address or transaction.
 Further, sample a cryptographic hash function $\hash_{\text{agg}}: \{0,1\}^* \to \F$ uniformly at random.
 
 
-\subsection{CreateAddress}
+\subsection{CreateKeys}
 
 \begin{enumerate}
 \item Each player $\alpha \in [0,\nu)$ chooses $s_{1,\alpha}, s_{2,\alpha}, r_\alpha \in \F$ uniformly at random, and sets $D_\alpha = \dcom(0, r_\alpha, 0)$.
@@ -458,19 +493,21 @@ s_1 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{1,\beta}\}_{\beta=0
 s_2 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{2,\beta}\}_{\beta=0}^{\nu-1}, \alpha \right) s_{2,\alpha} \\
 D &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) D_\alpha
 \end{align*}
-\item All players compute the aggregate public address components:
+\item All players compute the aggregate base key components:
 \begin{align*}
-Q_1 &= \dcom(s_1, 0, 0) \\
-Q_2 &= \dcom(s_2, 0, 0) + D
+P_1 &= \dcom(s_1, 0, 0) \\
+P_2 &= \dcom(s_2, 0, 0) + D
 \end{align*}
 
 Note that each player $\alpha$ keeps its spend key share $r_\alpha$ private.
+
+Since each player holds the aggregate incoming view key, it can compute public addresses using $\text{CreateAddress}$ as needed.
 \end{enumerate}
 
 
 \subsection{Spend}
 
-Because all players possess the aggregate full view key corresponding to the aggregate public address, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
+Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
 We describe now how the signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
 $$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
 
@@ -500,17 +537,17 @@ It sends $t_{2,\alpha}$ to all players.
 
 The key structure in Spark permits flexible and useful functionality relating to transaction scanning and generation.
 
-The incoming view key is used in $\text{Identify}$ operations to determine when a coin is directed to the associated public address, and to determine the coin's value and associated memo data.
+The incoming view key is used in $\text{Identify}$ operations to determine when a coin is directed to an associated public address, and to determine the coin's value and associated memo data.
 This permits two use cases of note.
 In one case, blockchain scanning can be delegated to a device or service without delegating spend authority for identified coins.
 In another case, wallet software in possession of a spend key can keep this key encrypted or otherwise securely stored during scanning operations, reducing key exposure risks.
 
-The full view key is used in $\text{Recover}$ operations to additionally compute the serial number and tag for coins directed to the associated public address.
+The full view key is used in $\text{Recover}$ operations to additionally compute the serial number and tag for coins directed to an associated public address.
 These tags can be used to identify a transaction spending the coin.
 Providing this key to a third party permits identification of incoming transactions and detection of outgoing transactions, which additionally provides balance computation, without delegating spend authority.
 Users like public charities may wish to permit public oversight of funds with this functionality.
 Other users may wish to provide this functionality to an auditor or accountant for bookkeeping purposes.
-In the case where a public address is used in threshold multisignature operations, a cosigner may wish to know if or when another cohort of cosigners has produced a transaction spending funds from its address.
+In the case where an address is used in threshold multisignature operations, a cosigner may wish to know if or when another cohort of cosigners has produced a transaction spending funds.
 
 Further, the full view key is used in $\text{Spend}$ to generate one-out-of-many proofs.
 Since the parallel one-out-of-many proof used in Spark can be computationally expensive, it may be unsuitable for generation by a computationally-limited device like a hardware wallet.
@@ -546,6 +583,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
         $(S,K,C)$ & & $3t$ & & \\
+        $\Pi_{\text{rec}}$ & Schnorr & & $2$ & \\
         $(\overline{v},\overline{m})$ & ChaCha20-Poly1305 & & & $(8 + M + 16)t$ \\
         \hline
     \end{tabular}
@@ -696,7 +734,7 @@ We recall the security definition for a DAP scheme $$\Pi = (\text{Setup}, \text{
 Each security property is formalized as a game between a polynomial-time adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, where in each game the behavior of honest parties is simulated via an oracle $\mathcal{O}^{DAP}$.
 The oracle $\mathcal{O}^{DAP}$ maintains a ledger $L$ of transactions and provides an interface for executing \text{CreateAddress}, \text{Mint}, and \text{Spend} algorithm operations for honest parties.
 To simulate behavior from honest parties, $\mathcal{A}$ passes a query to $\mathcal{C}$, which makes sanity checks and then proxies the queries to $\mathcal{O}^{DAP}$, returning the responses to $\mathcal{A}$ as needed.
-For \text{CreateAddress} queries, $\mathcal{C}$ runs the \text{CreateAddress} protocol algorithm and returns the public address $\addr_{pk}$ to $\mathcal{A}$.
+For \text{CreateAddress} queries, $\mathcal{C}$ first runs the \text{CreateKeys} protocol algorithm, then calls \text{CreateAddress} using the resulting incoming view key and a randomly-selected diversifier index, and finally returns the public address $\addr_{\text{pk}}$ to $\mathcal{A}$.
 For \text{Mint} queries, the adversary specifies the value and destination public address for the transaction, and the resulting transaction is produced and returned by $\mathcal{C}$ if valid.
 For \text{Spend} queries, the adversary specifies the input coins to be consumed, as well as the values and destination public addresses for the transaction, and the resulting transaction is produced (after $\mathcal{C}$ recovers the consumed coins) and returned by $\mathcal{C}$ if valid.
 The oracle $\mathcal{O}^{DAP}$ also provides an \text{Insert} query that allows the adversary to insert arbitrary and potentially malicious $\text{tx}_{\text{mint}}$ or $\text{tx}_{\text{spend}}$ transactions to the ledger $L$, provided they are valid.
@@ -709,6 +747,20 @@ This property means that if the coin appears on the ledger $L$ as an output of a
 
 Note that if the spend key holder cannot produce such a valid transaction, by construction the coin's tag must already appear in a previous valid transaction.
 Such a previous valid transaction must have a modified Chaum-Pedersen proof that extracts, in part, the address's private spend key $r$, a contradiction since the adversary has only a negligible advantage in discrete logarithm extraction.
+\end{remark}
+
+\begin{remark}
+It will be useful to assert that if the holder of an incoming view key is able to identify a coin, or if the holder of the corresponding full view key is able to recover a coin, then the coin serial number commitment computationally binds uniquely to a public address produced from $\text{CreateAddress}$ on the incoming view key for some diversifier index.
+
+It is straightforward to show this property holds.
+Successful execution of either the $\text{Identify}$ or $\text{Recover}$ algorithms implies in particular the verification $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ for some diversifier $i$ obtained from the algorithms during a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $K = kQ_{0,i}$.
+Hence the serial number commitment can be expressed as follows:
+\begin{align*}
+S &= \dcom(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
+&= \dcom(\hash_{\text{ser}}(s_1 kQ_{0,i}), 0, 0) + Q_{2,i} \\
+&= \dcom(\hash_{\text{ser}}(kQ_{1,i}), 0, 0) + Q_{2,i}
+\end{align*}
+Since diversified address components are produced using queries against independent cryptographic hash functions on the incoming view key $s_1$ and diversifier index $i$, they are unique and the desired binding holds.
 \end{remark}
 
 
@@ -799,18 +851,18 @@ If the augmented ledger $(L, \vec{a})$ contains a \text{Spend} transaction that 
 If instead the augmented ledger $(L, \vec{a})$ contains a \text{Mint} transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, again a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:honest}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:honest} is non-negligible.
-That is, $\mathcal{A}$ produces a \text{Spend} transaction $\text{tx}_{\text{spend}}$ by an \text{Insert} question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_1, Q_2) \in \text{ADDR}$.
+That is, $\mathcal{A}$ produces a \text{Spend} transaction $\text{tx}_{\text{spend}}$ by an \text{Insert} question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_0, Q_1, Q_2) \in \text{ADDR}$.
 
 Validity of the Chaum-Pedersen proof corresponding to this input of $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
 Validity of the corresponding parallel one-of-many proof gives a serial number commitment $S$ and extraction such that $S - S' = xH$, so $S = s'F + r'G + (x + y)H$.
 
-Now let $(s_1,s_2,r)$ be the secret key corresponding to the address $(Q_1,Q_2)$.
+Now let $(s_1,s_2,r)$ be the spend key corresponding to the address $(Q_0,Q_1,Q_2)$.
 Since $\text{tx}_{\text{spend}}$ consumes a coin recoverable by this address, a serial number commitment for the recovered coin is
 \begin{align*}
-\overline{S} &= \hash_{\text{ser}}(s_1 K, Q_1, Q_2)F + Q_2 \\
-&= (\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)F + rG
+\overline{S} &= \hash_{\text{ser}}(s_1 K)F + Q_2 \\
+&= (\hash_{\text{ser}}(s_1 K) + \hash_{Q_2}(s_1,i) + s_2)F + rG
 \end{align*}
-for recovery key $K$.
+for recovery key $K$ and some diversifier index $i$.
 
 Since the commitment scheme is binding, we must therefore have $r' = r$, which is a contradiction since $\mathcal{A}$ cannot extract this discrete logarithm from the public address.
 
@@ -855,8 +907,9 @@ Because we model this hash function as a random oracle, the outputs differ excep
 
 In the second case, suppose that the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}'$ contained in $\text{tx}'$ yields extraction $(s',r',y')$, and that the proof $\Pi_{\text{chaum}}$ contained in $\text{tx}$ yields $(s,r,y)$.
 Since the corresponding tags are identical, we must have $s' = s$ and $r' = r$.
-Any serial number commitment $S$ with a partial opening $(s,r,-)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component of the controlling public address $(Q_1,Q_2)$.
-Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or the $(Q_1,Q_2)$, which implies a non-negligible discrete logarithm advantage, a contradiction.
+Any serial number commitment $S$ with a partial opening $(s,r,-)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component corresponding to an address $(Q_0,Q_1,Q_2)$.
+Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or from any set of corresponding diversified address components $\{Q_{2,i}\}_i$ produced from the same spend key.
+However, each $Q_{2,i}$ is produced linearly against $Q_2$ and querying $\hash_{Q_2}$ with unique $(s_1,i)$ input, a contradiction.
 \end{proof}
 
 
@@ -910,13 +963,14 @@ Recall that the queries $Q$ and $Q^\prime$ are consistent with respect to public
 Depending on the query type, the challenger acts as follows:
 \begin{itemize}
     \item Answering \text{Recover} and \text{Insert} queries: The challenger proceeds as in the original \textbf{L-IND} experiment.
-    \item Answering \text{CreateAddress} queries: In this case the challenger replaces the public address components $Q_1$ and $Q_2$ with random strings of the appropriate lengths, producing $\text{addr}_{pk}$ that is returned to $\mathcal{A}$.
+    \item Answering \text{CreateAddress} queries: In this case the challenger replaces the public address components $(Q_0,Q_1,Q_2)$ with random strings of the appropriate lengths, producing $\text{addr}_{pk}$ that is returned to $\mathcal{A}$.
     \item Answering \text{Mint} queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately:
     \begin{enumerate}
         \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using \text{CreateCoin} as usual.
         \item Otherwise, it simulates coin generation:
         \begin{enumerate}
             \item Samples a recovery key $K$ uniformly at random.
+            \item Simulates the representation proof $\Pi_{\text{rec}}$ on $K$ and a random input binding in place of $K_{\text{der}}$.
             \item Samples a serial number commitment $S$ uniformly at random.
             \item Samples a value commitment $C$ uniformly at random.
             \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
@@ -940,6 +994,7 @@ Depending on the query type, the challenger acts as follows:
             \item Otherwise, it simulates coin generation:
             \begin{enumerate}
                 \item Samples a recovery key $K_j$ uniformly at random.
+                \item Simulates the representation proof $\Pi_{\text{rec}}$ on $K_j$ and a random input binding in place of $K_{\text{der},j}$.
                 \item Samples a serial number commitment $S_j$ uniformly at random.
                 \item Samples a value commitment $\overline{C}_j$ uniformly at random.
                 \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
