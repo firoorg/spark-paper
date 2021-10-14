@@ -170,7 +170,7 @@ Diversified addressing allows a recipient to provide distinct public addresses t
 \item A range proof for the value commitment, or a proof that a plaintext value is represented by the value commitment.
 \item A memo with arbitrary recipient data.
 \item An encrypted memo intended for decryption by the recipient.
-\item A recovery key used by the recipient to identify the coin and decrypt private data, and a proof of representation of this key (for use by the recipient).
+\item A recovery key used by the recipient to identify the coin and decrypt private data, and a related proof of representation (for use by the recipient).
 \end{itemize}
 
 \textbf{Private Transactions}. There are two types of private transactions in Spark:
@@ -297,7 +297,7 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \item Parse the recipient address $\addr_{\text{pk}} = (Q_0, Q_1, Q_2)$.
 \item Sample $k \in \F$.
 \item Compute the recovery key $K = kQ_0$ and derived recovery key $K_{\text{der}} = kQ_1$.
-\item Generate a representation proof $$\Pi_{\text{rec}} = \text{RepProve}(pp_{\text{rep}},Q_0,K ; k)$$ that also binds the value $K_{\text{der}}$ to the proof transcript.
+\item Generate a representation proof: $$\Pi_{\text{rec}} = \text{RepProve}(pp_{\text{rep}},F,kF ; k)$$
 \item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(K_{\text{der}}), 0, 0) + Q_2.$$
 \item Generate the value commitment $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$.
 \item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(K_{\text{der}}))).$$
@@ -307,10 +307,6 @@ Otherwise, output the tuple $(S, K, C, \Pi_{\text{rec}}, v, \overline{m})$.
 \end{enumerate}
 The case $b=0$ represents a coin with hidden value being generated in a $\text{Spend}$ transaction, while the case $b=0$ represents a coin with plaintext value being generated in a $\text{Mint}$ transaction.
 Note that it is possible to securely aggregate range proofs within a transaction; this does not affect protocol security.
-
-We further note the construction of the recovery key representation proof $\Pi_{\text{rec}}$.
-This proof asserts that the recovery key $K$ is well-formed with respect to the address component $Q_0$, which is not included in the coin data structure.
-We wish to avoid the case where a third party tests this proof against candidate addresses until the proof verifies correctly; to do so, we bind the derived recovery key $K_{\text{der}}$, which is a Diffie-Hellman shared secret only computable by the sender and recipient, into the proof transcript.
 
 
 \subsection{Mint}
@@ -345,7 +341,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
 \item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
-\item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ using the diversifier $i$, and return failure otherwise.
+\item Check that $$\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
@@ -367,7 +363,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
 \item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
-\item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ using the diversifier $i$, and return failure otherwise.
+\item Check that $$\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
@@ -753,7 +749,7 @@ Such a previous valid transaction must have a modified Chaum-Pedersen proof that
 It will be useful to assert that if the holder of an incoming view key is able to identify a coin, or if the holder of the corresponding full view key is able to recover a coin, then the coin serial number commitment computationally binds uniquely to a public address produced from $\text{CreateAddress}$ on the incoming view key for some diversifier index.
 
 It is straightforward to show this property holds.
-Successful execution of either the $\text{Identify}$ or $\text{Recover}$ algorithms implies in particular the verification $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},Q_{0,i},K)$ for some diversifier $i$ obtained from the algorithms during a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $K = kQ_{0,i}$.
+Successful execution of either the $\text{Identify}$ or $\text{Recover}$ algorithms implies in particular the verification $$\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ for some diversifier $i$ obtained from the algorithms during a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $$K = k\hash_{Q_0}(s_1,i)F = kQ_{0,i}.$$
 Hence the serial number commitment can be expressed as follows:
 \begin{align*}
 S &= \dcom(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
@@ -970,7 +966,7 @@ Depending on the query type, the challenger acts as follows:
         \item Otherwise, it simulates coin generation:
         \begin{enumerate}
             \item Samples a recovery key $K$ uniformly at random.
-            \item Simulates the representation proof $\Pi_{\text{rec}}$ on $K$ and a random input binding in place of $K_{\text{der}}$.
+            \item Simulates the representation proof $\Pi_{\text{rec}}$ on a random input value.
             \item Samples a serial number commitment $S$ uniformly at random.
             \item Samples a value commitment $C$ uniformly at random.
             \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
@@ -994,7 +990,7 @@ Depending on the query type, the challenger acts as follows:
             \item Otherwise, it simulates coin generation:
             \begin{enumerate}
                 \item Samples a recovery key $K_j$ uniformly at random.
-                \item Simulates the representation proof $\Pi_{\text{rec}}$ on $K_j$ and a random input binding in place of $K_{\text{der},j}$.
+                \item Simulates the representation proof $\Pi_{\text{rec}}$ on a random input value.
                 \item Samples a serial number commitment $S_j$ uniformly at random.
                 \item Samples a value commitment $\overline{C}_j$ uniformly at random.
                 \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
