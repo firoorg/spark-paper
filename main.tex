@@ -574,7 +574,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \hline
         $(S',C')$ & & $2w$ & & \\
         $\Pi_{\text{par}}$ & this paper & $(2m + 4)w$ & $[m(n-1) + 4]w$ & \\
-        $\Pi_{\text{chaum}}$ & this paper & $3w$ & $3w$ & \\
+        $\Pi_{\text{chaum}}$ & this paper & $2w$ & $3w$ & \\
         \hline
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
@@ -601,7 +601,7 @@ Table \ref{table:time} shows the verification batch complexity in terms of total
         \hline
         Parallel one-out-of-many & $B[w(2m + 6) + 2m^m] + m^n + 1$ \\
         Bulletproofs+ & $B(t + 2\lg(64t) + 3) + 128T + 2$ \\
-        Modified Chaum-Pedersen & $B(5w) + 4$ \\
+        Modified Chaum-Pedersen & $B(4w) + 4$ \\
         Schnorr & $B(w + t + 1) + 2$ \\
         \hline
     \end{tabular}
@@ -633,10 +633,10 @@ $$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, 
 The protocol proceeds as follows:
 \begin{enumerate}
     \item The prover selects random $r,s,t \in \F$.
-    It computes $$(A_1, A_2, A_3) := (rF + sG, rT + sG, tH)$$ and sends these values to the verifier.
+    It computes $$(A_1, A_2) := (rF + sG + tH, rT + sG)$$ and sends these values to the verifier.
     \item The verifier selects a random challenge $c \in \F$ and sends it to the prover.
     \item The prover computes responses $$(t_1, t_2, t_3) := (r + cx, s + cy, t + cz)$$ and sends these values to the verifier.
-    \item The verifier accepts the proof if and only if $$A_1 + A_3 + cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
+    \item The verifier accepts the proof if and only if $$A_1 cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
 \end{enumerate}
 
 We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
@@ -645,15 +645,15 @@ We now prove that the protocol is complete, special sound, and special honest-ve
 Completeness of this protocol follows trivially by inspection.
 
 To show the protocol is special honest-verifier zero knowledge, we construct a valid simulator producing transcripts identically distributed to those of valid proofs.
-The simulator chooses a random challenge $c \in \F$, random scalar values $t_1, t_2, t_3 \in \F$, and a random value $A_1 \in \G$.
-It sets $A_2 := t_1 T + t_2 H - cU$ and $A_3 := t_1 F + t_2 G + t_3 H - cS - A_1$.
+The simulator chooses a random challenge $c \in \F$ and random scalar values $t_1, t_2, t_3 \in \F$.
+It sets $A_1 := t_1 F + t_2 G + t_3 H - cS$ and $A_2 := t_1 T + t_2 H - cU$.
 Such a transcript will be accepted by an honest verifier.
 Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H,U$ are independent, as are transcript elements produced by the simulator.
 
 To show the protocol is special sound, consider two accepting transcripts with distinct challenge values $c \neq c' \in \F$:
-$$(A_1, A_2, A_3, c, t_1, t_2, t_3)$$
+$$(A_1, A_2, c, t_1, t_2, t_3)$$
 and
-$$(A_1, A_2, A_3, c', t'_1, t'_2, t'_3)$$
+$$(A_1, A_2, c', t'_1, t'_2, t'_3)$$
 The first verification equation applied to the two transcripts implies that $$(c - c')S = (t_1 - t'_1)F + (t_2 - t'_2)G + (t_3 - t'_3)H,$$ so we extract the witness values $x := (t_1 - t'_1)/(c - c')$ and $y := (t_2 - t'_2)/(c - c')$ and $z := (t_3 - t'_3)/(c - c')$, or a nontrivial discrete logarithm relation between $F,G,H$ (a contradiction if these generators are independent).
 Similarly, the second verification equation implies that $$(c - c')U = (t_1 - t'_1)T + (t_2 - t'_2)G,$$ yielding the same values for $x$ and $y$ as required.
 
