@@ -8,4 +8,4 @@ Release versions are posted to the [IACR preprint archive](https://eprint.iacr.o
 Testing consists of a workflow in this repository that builds the paper and checks for errors and certain warnings.
 You can view the resulting PDF as a build artifact.
 
-![Build status](../../actions/workflows/build.yml/badge.svg)
+[![Build status](../../actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
