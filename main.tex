@@ -555,6 +555,7 @@ Providing this key to a more powerful device enables easy generation of this pro
 It is instructive to examine the efficiency of $\text{Spend}$ transactions in size, generation complexity, and verification complexity.
 In addition to our previous notation for parameters, let $v_{\text{max}} = 2^{64}$, so coin values and fees can be represented by $8$-byte unsigned integers.
 Further, suppose coin memos are fixed at $M$ bytes in length, with a $16$-byte authentication tag; this is the case for the ChaCha20-Poly1305 authenticated symmetric encryption construction, for example \cite{chachapoly}.
+Additionally, the arguments in \cite{schnorr} imply that Schnorr representation proofs can use truncated hash outputs for reduced proof size.
 Transaction size data for specific component instantiations is given in Table \ref{table:size}, where we consider the size in terms of group elements, field elements, and other data.
 Note that we do not include input ambiguity set references in this data, as this depends on implementation-specific selection and representation criteria.
 
@@ -568,7 +569,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \hline
         $f$ & & & & $8$ \\
         $\Pi_{\text{rp}}$ & Bulletproofs+ & $2 \lceil \lg(64t) \rceil + 3$ & $3$ & \\
-        $\Pi_{\text{bal}}$ & Schnorr & & $2$ & \\
+        $\Pi_{\text{bal}}$ & Schnorr (short)& & $1.5$ & \\
         \hline
         \multicolumn{5}{|c|}{Input data ($w$ coins)} \\
         \hline
@@ -579,7 +580,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
         $(S,K,C)$ & & $3t$ & & \\
-        $\Pi_{\text{rec}}$ & Schnorr & & $2$ & \\
+        $\Pi_{\text{rec}}$ & Schnorr (short) & & $1.5$ & \\
         $(\overline{v},\overline{m})$ & ChaCha20-Poly1305 & & & $(8 + M + 16)t$ \\
         \hline
     \end{tabular}
