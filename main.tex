@@ -513,9 +513,8 @@ It generates a commitment to the tuple $(\overline{r}_\alpha, \overline{s}_\alph
 \item Each player reveals its commitment opening to all players, verifies all players' openings, and aborts if any are invalid.
 \item All players compute the initial proof terms:
 \begin{align*}
-A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) F + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
-A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
-A_3 &= \left( \sum_{\beta=0}^{\nu-1} \overline{t}_\beta \right) H
+A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) F + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) + \left( \sum_{\beta=0}^{\nu-1} \overline{t}_\beta \right) H \\
+A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G)
 \end{align*}
 They compute the challenge $c$ from the initial proof transcript.
 \item Each player $\alpha \in [0,\nu)$ computes the following:
@@ -637,7 +636,7 @@ The protocol proceeds as follows:
     It computes $$(A_1, A_2) := (rF + sG + tH, rT + sG)$$ and sends these values to the verifier.
     \item The verifier selects a random challenge $c \in \F$ and sends it to the prover.
     \item The prover computes responses $$(t_1, t_2, t_3) := (r + cx, s + cy, t + cz)$$ and sends these values to the verifier.
-    \item The verifier accepts the proof if and only if $$A_1 cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
+    \item The verifier accepts the proof if and only if $$A_1 + cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
 \end{enumerate}
 
 We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
