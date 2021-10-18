@@ -340,7 +340,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
-\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
@@ -362,7 +362,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
-\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{Q_2}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Query $\text{AddrTable}$ on the value $S - \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
