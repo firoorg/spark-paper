@@ -47,14 +47,14 @@ To mitigate Mimblewimble's linkability issue, Beam has designed and implemented 
 The Lelantus protocol currently used in Firo does not provide recipient privacy; it supports only mints and signer-ambiguous spends of arbitrary amounts that interact with transparent Bitcoin-style outputs, which can leak information about recipient identity \cite{lelantus}.
 Seraphis \cite{seraphis} is a transaction protocol framework of similar design being developed concurrently.
 
-Here we introduce Spark, an iteration on the Lelantus protocol enabling trustless private transactions which supports sender, receiver and transaction amount privacy.
+Here we introduce Spark, an iteration on the Lelantus protocol enabling trustless private transactions which supports sender, recipient, and transaction amount privacy.
 Transactions in Spark, like those in Lelantus and Monero, use specified sender anonymity sets composed of previously-generated shielded outputs.
 A parallel proving system adapted from a construction by Groth and Bootle \textit{et al.} \cite{groth,bootle} (of independent interest and used in other modified forms in Lelantus\cite{lelantus} and Triptych \cite{triptych}) proves that a consumed output exists in the anonymity set; amounts are encrypted and hidden algebraically in Pedersen commitments, and a tag derived from a verifiable random function \cite{dodis,omniring} prevents consuming the same output multiple times, which in the context of a transaction protocol would constitute a double-spend attempt.
 
 Spark transactions support efficient verification in batches, where range and spend proofs can take advantage of common proof elements and parameters to lower the marginal cost of verifying each proof in such a batch; when coupled with suitably-chosen sender anonymity sets, the verification time savings of batch verification can be significant.
 
 Spark enables additional useful functionality.
-The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
+The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
 The protocol further adds two levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
@@ -474,57 +474,91 @@ If the input transaction is a spend transaction:
 Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
 We describe a method for signing groups to perform the $\text{CreateKeys}$ and $\text{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
 
-Throughout this section, suppose we have a group of $\nu$ signers who wish to collaboratively produce an address or transaction.
-Further, sample a cryptographic hash function $\hash_{\text{agg}}: \{0,1\}^* \to \F$ uniformly at random.
+Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
+Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{\rho_F},\hash_{\rho_H}: \{0,1\}^* \to \F$$ uniformly at random.
 
 
 \subsection{CreateKeys}
 
+To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the following two-round key generation process:
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $s_{1,\alpha}, s_{2,\alpha}, r_\alpha \in \F$ uniformly at random, and sets $D_\alpha = \dcom(0, r_\alpha, 0)$.
-It sends the the values $s_{1,\alpha}, s_{2,\alpha}, D_\alpha$ to all players.
-\item All players compute the aggregate incoming view key and full view key components:
-\begin{align*}
-s_1 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{1,\beta}\}_{\beta=0}^{\nu-1}, \alpha \right) s_{1,\alpha} \\
-s_2 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{2,\beta}\}_{\beta=0}^{\nu-1}, \alpha \right) s_{2,\alpha} \\
-D &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) D_\alpha
-\end{align*}
-\item All players compute the aggregate base key components:
-\begin{align*}
-P_1 &= \dcom(s_1, 0, 0) \\
-P_2 &= \dcom(s_2, 0, 0) + D
-\end{align*}
-
-Note that each player $\alpha$ keeps its spend key share $r_\alpha$ private.
-
-Since each player holds the aggregate incoming view key, it can compute public addresses using $\text{CreateAddress}$ as needed.
+    \item Selects a set of coefficients $\{a_{\alpha,j}\}_{j=0}^{t-1} \subset \F$ uniformly at random.
+    \item Selects view key shares $s_{1,\alpha},s_{2,\alpha} \in \F \setminus \{0\}$ uniformly at random.
+    \item Produces a proof of knowledge of $a_{\alpha,0}$:
+    \begin{enumerate}
+        \item Chooses $k_\alpha \in \F$ uniformly at random.
+        \item Sets $R_\alpha = k_\alpha G$.
+        \item Sets $c_\alpha = \hash_{\text{pok}}(\alpha,a_{\alpha,0}G,R_\alpha)$.
+        \item Sets $\mu_\alpha = k_\alpha + a_{\alpha,0}c_\alpha$.
+    \end{enumerate}
+    \item Produces a vector of commitments $C_\alpha = \{a_{\alpha,j}G\}_{j=0}^{t-1}$ to its coefficients.
+    \item Sends the tuple $(R_\alpha,\mu_\alpha,C_\alpha,s_{1,\alpha},s_{2,\alpha})$ to all other players $1 \leq \beta \neq \alpha \leq \nu$.
+    \item On receipt of a tuple $(R_\beta,\mu_\beta,C_\beta,s_{1,\beta},s_{2,\beta})$ from another player $\beta$:
+    \begin{enumerate}
+        \item Checks that $s_{1,\beta} \neq 0$ and $s_{2,\beta} \neq 0$ and aborts otherwise.
+        \item Verifies the proof of knowledge by checking that $$\mu_\beta G - \hash_{\text{pok}}(\beta,C_{\beta,0},R_\beta) = R_\beta$$ and aborting otherwise.
+    \end{enumerate}
+    \item For each $1 \leq \beta \leq \nu$, computes a player share $$\widehat{r}_{\alpha,\beta} = \sum_{j=0}^{t-1} a_{\alpha,j}\beta^j$$ and sends it to player $\beta$.
+    \item On receipt of a player share $\widehat{r}_{\beta,\alpha}$ from another player $\beta$, verifies the share by checking that $$\sum_{j=0}^{t-1} \alpha^jC_{\beta,j} = \widehat{r}_{\beta,\alpha}G$$ and aborting otherwise.
+    \item Computes its private spend key share $r_\alpha = \sum_{\beta=1}^\nu \widehat{r}_{\beta,\alpha}$ and the group public spend key $D = \sum_{\beta=1}^\nu C_{\beta,0}$.
+    \item Computes the group view keys:
+    \begin{align*}
+        s_1 &= \sum_{\beta=1}^\nu \hash_{s_1}(\{s_{1,\gamma}\}_{\gamma=1}^\nu,\beta)s_{1,\beta} \\
+        s_2 &= \sum_{\beta=1}^\nu \hash_{s_2}(\{s_{2,\gamma}\}_{\gamma=1}^\nu,\beta)s_{2,\beta}
+    \end{align*}
 \end{enumerate}
+Using the tuple $(s_1,s_2,D)$, any player can additionally compute the base key components $P_1 = \dcom(s_1,0,0)$ and $P_2 = \dcom(s_2,0,0) + D$.
+Since each player holds the aggregate incoming view key, it can compute public addresses using $\text{CreateAddress}$ as needed.
+
+\begin{remark}
+Because any player can produce a diversified address after these steps without interacting with other players, it can generate such an address with a large diversifier index.
+Since coin identification requires that an incoming view key holder precompute a hash table with expected diversidifer indexes, it is possible that another player may not properly identify coins sent to the large-index address.
+This means that a colluding threshold subset of signers can generate addresses and receive and spend coins without detection by non-colluding players.
+While this may be undesirable, it does not violate security requirements.
+Further, any such colluding set of players could simply engage in a separate key generation process to produce such addresses independent of non-colluding players.
+\end{remark}
+
+
+\subsection{Precompute}
+
+The signing group can reduce the communication complexity of proof generation by precomputing and sharing sets of nonce data.
+Each future signing operation uses one such nonce set for each signing player, which cannot be reused.
+The signing group can precompute as many nonce sets as needed for expected signing operations, and can perform this operation as needed.
+In particular, the group may wish to do so during the key generation process, where the added communication round may be less impactful than during later proof generation.
+
+To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ engages in the following one-round process:
+\begin{enumerate}
+    \item Generates a vector $L_\alpha$, where for $0 \leq k < \pi$ it selects $d_{\alpha,k},e_{\alpha,k} \in \F$ uniformly at random, sets $L_{\alpha,k} = (d_{\alpha,k}G,e_{\alpha,k}G)$, and then sends $L_\alpha$ to all other players.
+    \item On receipt of a vector $L_\beta$ from another player $\beta$, checks that $d_{\beta,k}G \neq 0$ and $e_{\beta,k}G \neq 0$ for all $0 \leq k < \pi$, and aborts otherwise.
+\end{enumerate}
+
 
 
 \subsection{Spend}
 
 Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
-We describe now how the signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
+We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
 $$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
 
+For the sake of notation convenience, we assume that the signing players are indexed $1 \leq \alpha \leq t$.
+Further, assume that each nonce list $L_\alpha$ contains $k + 1$ unused nonces.
+Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $\overline{r}_\alpha, \overline{s}_\alpha, \overline{t}_\alpha \in \F$ uniformly at random.
-It generates a commitment to the tuple $(\overline{r}_\alpha, \overline{s}_\alpha G, \overline{t}_\alpha)$ and sends it to all players.
-\item Each player reveals its commitment opening to all players, verifies all players' openings, and aborts if any are invalid.
-\item All players compute the initial proof terms:
-\begin{align*}
-A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) F + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) + \left( \sum_{\beta=0}^{\nu-1} \overline{t}_\beta \right) H \\
-A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G)
-\end{align*}
-They compute the challenge $c$ from the initial proof transcript.
-\item Each player $\alpha \in [0,\nu)$ computes the following:
-\begin{align*}
-t_1 &= \sum_{\beta=0}^{\nu-1} \overline{r}_\beta + cs_u \\
-t_{2,\alpha} &= \overline{s}_\alpha + c\hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) r_\alpha \\
-t_3 &= \sum_{\beta=0}^{\nu-1} \overline{t}_\beta - c\hash_{\text{ser}'}(s_u, D)
-\end{align*}
-It sends $t_{2,\alpha}$ to all players.
-\item All players compute the final proof term: $$t_2 = \sum_{\beta=0}^{\nu-1} t_{2,\beta}$$
+    \item Parses the next available set of nonces $(d_{\beta,k}G,e_{\beta,k}G)$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute, for all $1 \leq \beta \leq t$, the following value:
+    $$\rho_\beta = \hash_{\rho}(\{d_{\gamma,k}G,e_{\gamma,k}G\}_{\gamma=1}^{t},\beta,S_u',T_u)$$
+    \item Sets the initial proof commitments:
+    \begin{align*}
+        A_1 &= \sum_{\beta=1}^t \left( \hash_{\rho_F}(\rho_\beta)F + d_{\beta,k}G + \rho_\beta e_{\beta,k}G + \hash_{\rho_H}(\rho_\beta)H \right) \\
+        A_2 &= \sum_{\beta=1}^t \left( \hash_{\rho_F}(\rho_\beta)T + d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right)
+    \end{align*}
+    \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,i} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
+    \begin{align*}
+        t_1 &= cs_u + \sum_{\beta=1}^t \hash_{\rho_F}(\rho_\beta) \\
+        t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
+        t_3 &= \sum_{\beta=1}^t \hash_{\rho_H}(\rho_\beta) - c\hash_{\text{ser}'}(s_u,D)
+    \end{align*}
 \end{enumerate}
 
 
