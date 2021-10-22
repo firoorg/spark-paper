@@ -553,6 +553,7 @@ Each such player $\alpha$ engages in the following one-round process:
     \end{align*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
     \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,i} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho_B e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
         t_1 &= cs_u + \sum_{\beta=1}^t \hash_{\rho_F}(\rho_\beta) \\
