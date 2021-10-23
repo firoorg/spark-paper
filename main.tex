@@ -475,7 +475,7 @@ Spark addresses and transactions support efficient and secure multisignature ope
 We describe a method for signing groups to perform the $\text{CreateKeys}$ and $\text{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
 
 Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
-Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{\rho_F},\hash_{\rho_H}: \{0,1\}^* \to \F$$ uniformly at random.
+Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
 
 
 \subsection{CreateKeys}
@@ -548,17 +548,17 @@ Each such player $\alpha$ engages in the following one-round process:
     $$\rho_\beta = \hash_{\rho}(\{d_{\gamma,k}G,e_{\gamma,k}G\}_{\gamma=1}^{t},\beta,S_u',T_u)$$
     \item Sets the initial proof commitments:
     \begin{align*}
-        A_1 &= \sum_{\beta=1}^t \left( \hash_{\rho_F}(\rho_\beta)F + d_{\beta,k}G + \rho_\beta e_{\beta,k}G + \hash_{\rho_H}(\rho_\beta)H \right) \\
-        A_2 &= \sum_{\beta=1}^t \left( \hash_{\rho_F}(\rho_\beta)T + d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right)
+        A_1 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right)F + \hash_H\left(\{\rho_\beta\}_{\beta=1}^t\right)H + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right) \\
+        A_2 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right)T_u + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right)
     \end{align*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
     \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,i} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
     \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho_B e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
-        t_1 &= cs_u + \sum_{\beta=1}^t \hash_{\rho_F}(\rho_\beta) \\
+        t_1 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right) + cs_u \\
         t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
-        t_3 &= \sum_{\beta=1}^t \hash_{\rho_H}(\rho_\beta) - c\hash_{\text{ser}'}(s_u,D)
+        t_3 &= \hash_H\left(\{\rho_\beta\}_{\beta=1}^t\right) - c\hash_{\text{ser}'}(s_u,D)
     \end{align*}
 \end{enumerate}
 
