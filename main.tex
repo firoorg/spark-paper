@@ -482,7 +482,7 @@ Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2}
 
 To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the following two-round key generation process:
 \begin{enumerate}
-    \item Selects a set of coefficients $\{a_{\alpha,j}\}_{j=0}^{t-1} \subset \F$ uniformly at random.
+    \item Selects a set of coefficients $\{a_{\alpha,j}\}_{j=0}^{t-1} \subset \F$ uniformly at random, and uses them to define the polynomial $f_\alpha(x) = \sum_{j=0}^{t-1} a_{\alpha,j}x^j$.
     \item Selects view key shares $s_{1,\alpha},s_{2,\alpha} \in \F \setminus \{0\}$ uniformly at random.
     \item Produces a proof of knowledge of $a_{\alpha,0}$:
     \begin{enumerate}
@@ -498,7 +498,7 @@ To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the f
         \item Checks that $s_{1,\beta} \neq 0$ and $s_{2,\beta} \neq 0$ and aborts otherwise.
         \item Verifies the proof of knowledge by checking that $$\mu_\beta G - \hash_{\text{pok}}(\beta,C_{\beta,0},R_\beta) = R_\beta$$ and aborting otherwise.
     \end{enumerate}
-    \item For each $1 \leq \beta \leq \nu$, computes a player share $$\widehat{r}_{\alpha,\beta} = \sum_{j=0}^{t-1} a_{\alpha,j}\beta^j$$ and sends it to player $\beta$.
+    \item For each $1 \leq \beta \leq \nu$, computes a player share $\widehat{r}_{\alpha,\beta} = f_\alpha(\beta)$ and sends it to player $\beta$.
     \item On receipt of a player share $\widehat{r}_{\beta,\alpha}$ from another player $\beta$, verifies the share by checking that $$\sum_{j=0}^{t-1} \alpha^jC_{\beta,j} = \widehat{r}_{\beta,\alpha}G$$ and aborting otherwise.
     \item Computes its private spend key share $r_\alpha = \sum_{\beta=1}^\nu \widehat{r}_{\beta,\alpha}$ and the group public spend key $D = \sum_{\beta=1}^\nu C_{\beta,0}$.
     \item Computes the group view keys:
@@ -552,7 +552,7 @@ Each such player $\alpha$ engages in the following one-round process:
         A_2 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right)T_u + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right)
     \end{align*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
-    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,i} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,\alpha} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
     \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho_B e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
