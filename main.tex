@@ -54,7 +54,7 @@ A parallel proving system adapted from a construction by Groth and Bootle \texti
 Spark transactions support efficient verification in batches, where range and spend proofs can take advantage of common proof elements and parameters to lower the marginal cost of verifying each proof in such a batch; when coupled with suitably-chosen sender anonymity sets, the verification time savings of batch verification can be significant.
 
 Spark enables additional useful functionality.
-The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
+The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost,schnorrwithschnorr} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
 The protocol further adds two levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
@@ -473,6 +473,7 @@ If the input transaction is a spend transaction:
 
 Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
 We describe a method for signing groups to perform the $\text{CreateKeys}$ and $\text{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
+This method uses techniques from \cite{musig,schnorr,schnorrwithschnorr}.
 
 Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
 Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
@@ -542,23 +543,24 @@ $$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
 
 For the sake of notation convenience, we assume that the signing players are indexed $1 \leq \alpha \leq t$.
 Further, assume that each nonce list $L_\alpha$ contains $k + 1$ unused nonces.
+We also assume the context binding value $\mu$ has been defined.
 Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-    \item Parses the next available set of nonces $(d_{\beta,k}G,e_{\beta,k}G)$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute, for all $1 \leq \beta \leq t$, the following value:
-    $$\rho_\beta = \hash_{\rho}(\{d_{\gamma,k}G,e_{\gamma,k}G\}_{\gamma=1}^{t},\beta,S_u',T_u)$$
+    \item Parses the next available set of nonces $(d_{\beta,k}G,e_{\beta,k}G)$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute the following value:
+    $$\rho = \hash_{\rho}(\{\beta,d_{\beta,k}G,e_{\beta,k}G\}_{\beta=1}^{t},\mu,S_u',T_u)$$
     \item Sets the initial proof commitments:
     \begin{align*}
-        A_1 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right)F + \hash_H\left(\{\rho_\beta\}_{\beta=1}^t\right)H + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right) \\
-        A_2 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right)T_u + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho_\beta e_{\beta,k}G \right)
+        A_1 &= \hash_F(\rho)F + \hash_H(\rho)H + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho e_{\beta,k}G \right) \\
+        A_2 &= \hash_F(\rho)T_u + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho e_{\beta,k}G \right)
     \end{align*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
-    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,\alpha} = d_{\alpha,k} + \rho_\alpha e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
-    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho_B e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,\alpha} = d_{\alpha,k} + \rho e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
-        t_1 &= \hash_F\left(\{\rho_\beta\}_{\beta=1}^t\right) + cs_u \\
+        t_1 &= \hash_F(\rho) + cs_u \\
         t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
-        t_3 &= \hash_H\left(\{\rho_\beta\}_{\beta=1}^t\right) - c\hash_{\text{ser}'}(s_u,D)
+        t_3 &= \hash_H(\rho) - c\hash_{\text{ser}'}(s_u,D)
     \end{align*}
 \end{enumerate}
 
