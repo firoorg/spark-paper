@@ -213,7 +213,7 @@ We provide detailed descriptions below, and show security of the resulting proto
 In this section we provide detailed description of the DAP scheme algorithms.
 
 
-\subsection{Setup}
+\subsection{\texorpdfstring{$\func{Setup}$}{Setup}}
 
 In our setup the public parameters $pp$ are comprised of the corresponding public parameters of a Pedersen commitment (and matrix commitment) scheme, representation proving system, modified Chaum-Pedersen proving system, parallel one-out-of-many proving system, symmetric encryption scheme, and range proving system.
 
@@ -239,7 +239,7 @@ In practice, these hash functions may be chosen using domain separation of a sin
 \end{enumerate}
 
 
-\subsection{CreateKeys}
+\subsection{\texorpdfstring{$\func{CreateKeys}$}{CreateKeys}}
 
 We describe the construction of key types used in the protocol.
 
@@ -261,7 +261,7 @@ Note that the base key $\addr_{\text{base}}$ is an internal data structure, and 
 Rather, it is used for producing diversified addresses, which are described below.
 
 
-\subsection{CreateAddress}
+\subsection{\texorpdfstring{$\func{CreateAddress}$}{CreateAddress}}
 
 This algorithm generates a \textit{diversified} public address from an incoming view key.
 A given public address is privately and deterministically tied to an index called the \textit{diversifier}.
@@ -285,7 +285,7 @@ Q_{2,i} &= \dcom(\hash_{Q_2}(s_1,i),0,0) + P_2
 Note that we drop the diversifier index $i$ from subsequent notation when referring to addresses in operations performed by entities other than the address holder, since such users are not provided this index and cannot compute it.
 
 
-\subsection{CreateCoin}
+\subsection{\texorpdfstring{$\func{CreateCoin}$}{CreateCoin}}
 
 This algorithm generates a new coin destined for a given public address.
 Note that while this algorithm generates a serial number commitment, it cannot compute the underlying serial number.
@@ -310,7 +310,7 @@ The case $b=0$ represents a coin with hidden value being generated in a spend tr
 Note that it is possible to securely aggregate range proofs within a transaction; this does not affect protocol security.
 
 
-\subsection{Mint}
+\subsection{\texorpdfstring{$\func{Mint}$}{Mint}}
 
 This algorithm generates new coins from either a consensus-determined mining process, or by consuming non-Spark outputs from a base layer with public value.
 Note that while such implementation-specific auxiliary data may be necessary for generating such a transaction and included, we do not specifically list this here.
@@ -327,7 +327,7 @@ Notably, the coin value used in this algorithm is assumed to be the sum of all p
 \end{enumerate}
 
 
-\subsection{Identify}
+\subsection{\texorpdfstring{$\func{Identify}$}{Identify}}
 
 This algorithm allows a recipient (or designated entity) to compute the value and memo from a coin destined for any diversified address it has produced.
 It requires the incoming view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
@@ -349,7 +349,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \end{enumerate}
 
 
-\subsection{Recover}
+\subsection{\texorpdfstring{$\func{Recover}$}{Recover}}
 
 This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for any diversified address it has produced.
 It requires the full view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
@@ -373,7 +373,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \end{enumerate}
 
 
-\subsection{Spend}
+\subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
 This algorithm allows a recipient to generate a transaction that consumes coins it controls, and generates new coins destined for arbitrary public addresses.
 The process is designed to be modular; in particular, only the full view key is required to generate the parallel one-out-of-many proof, which may be computationally expensive.
@@ -431,7 +431,7 @@ Such transfer functionality is likely to introduce practical risk that is not ca
 \end{remark}
 
 
-\subsection{Verify}
+\subsection{\texorpdfstring{$\func{Verify}$}{Verify}}
 
 This algorithm assesses the validity of a transaction.
 
@@ -480,7 +480,7 @@ Throughout this section, suppose we have a group of $\nu$ players who wish to co
 Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
 
 
-\subsection{CreateKeys}
+\subsection{\texorpdfstring{$\func{CreateKeys}$}{CreateKeys}}
 
 To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the following two-round key generation process:
 \begin{enumerate}
@@ -521,7 +521,7 @@ Further, any such colluding set of players could simply engage in a separate key
 \end{remark}
 
 
-\subsection{Precompute}
+\subsection{\texorpdfstring{$\func{Precompute}$}{Precompute}}
 
 The signing group can reduce the communication complexity of proof generation by precomputing and sharing sets of nonce data.
 Each future signing operation uses one such nonce set for each signing player, which cannot be reused.
@@ -536,7 +536,7 @@ To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ eng
 
 
 
-\subsection{Spend}
+\subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
 Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
 We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
@@ -908,7 +908,7 @@ If we let $T$ denote the set of all transactions produced by $\func{Spend}$ quer
     \item both $\text{tx}'$ and $\text{tx}$ are valid transactions with respect to the ledger $L^{\prime}$ containing all transactions preceding $\text{tx}$ on $L$.
 \end{itemize}
 
-We say a DAP scheme $\Pi$ is $\func{TRNM}$-secure if the adversary $\mathcal{A}$ wins the game $\func{TR-NM}$ only with negligible probability:
+We say a DAP scheme $\Pi$ is $\func{TRNM}$-secure if the adversary $\mathcal{A}$ wins the game $\func{TRNM}$ only with negligible probability:
 $$\text{Pr}[\func{TRNM}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
 
 Let $\mathcal{T}$ be the set of all $\text{tx}_{\text{spend}}$ transactions generated by the $\mathcal{O}^{DAP}$ in response to $\func{Spend}$ queries.
