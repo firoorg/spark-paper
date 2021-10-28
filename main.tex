@@ -56,14 +56,15 @@ Spark transactions support efficient verification in batches, where range and sp
 
 Spark enables additional useful functionality.
 The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost,schnorrwithschnorr} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
-The protocol further adds two levels of opt-in visibility into transactions without delegating spend authority.
+The protocol further adds three levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
+Payment proofs allow a sender to assert the destination, value, and memo of a coin while proving (in zero knowledge) that it knows the secret data used to produce the coin; this permits more fine-grained disclosure without revealing view keys.
 
 All constructions used in Spark require only public parameter generation, ensuring that no trusted parties are required to bootstrap the protocol or ensure soundness.
 
 
-\section {Cryptographic Preliminaries}
+\section{Cryptographic Preliminaries}
 
 Throughout this paper, we use additive notation for group operations.
 Let $\mathbb{N}$ be the set $\{0,1,2,\ldots\}$ of non-negative integers.
@@ -205,7 +206,7 @@ The setup process does not require any trusted parameter generation.
 \item $\func{Verify}$: This algorithm accepts either a mint transaction or a spend transaction, and outputs a bit to assess validity.
 \end{itemize}
 
-We provide detailed descriptions below, and show security of the resulting protocol in the appendixes.
+We provide detailed descriptions below, and show security of the resulting protocol in Appendix \ref{app:security}.
 
 
 \section{Algorithm Constructions}
@@ -566,9 +567,9 @@ Each such player $\alpha$ engages in the following one-round process:
 \end{enumerate}
 
 
-\section{Applications of Key Structures}
+\section{View Keys and Payment Proofs}
 
-The key structure in Spark permits flexible and useful functionality relating to transaction scanning and generation.
+The key and proof structures in Spark enable flexible and useful functionality relating to transaction scanning, generation, and disclosure.
 
 The incoming view key is used in $\func{Identify}$ operations to determine when a coin is directed to an associated public address, and to determine the coin's value and associated memo data.
 This permits two use cases of note.
@@ -585,6 +586,17 @@ In the case where an address is used in threshold multisignature operations, a c
 Further, the full view key is used in $\func{Spend}$ to generate one-out-of-many proofs.
 Since the parallel one-out-of-many proof used in Spark can be computationally expensive, it may be unsuitable for generation by a computationally-limited device like a hardware wallet.
 Providing this key to a more powerful device enables easy generation of this proof (and other transaction components like range proofs), while ensuring that only the device holding the spend key can complete the transaction by generating the simple modified Chaum-Pedersen proofs.
+
+Payment proofs, which we introduce in Appendix \ref{app:payment}, allow for disclosure of data for individual coins.
+Specifically, a payment proof asserts in zero knowledge that the prover knows the secret data used to generate a given coin that is destined for a given public address.
+The proof convinces a verifier that the holder of the incoming view key for the public address can successfully identify the coin, as well as provides the verifier with the value and memo for the coin.
+Unlike view keys, which provide broad visibility into transactions associated to a public address, a payment proof is limited to a single coin and can be bound to an arbitrary proof context to prevent replay.
+
+Payment proofs may be useful in a number of circumstances.
+For example, a customer may issue a payment to a retailer, but fail to use the correct diversified address or memo required by the retailer to associate the payment to the customer's order.
+By providing the retailer with a payment proof, the customer can assert that it produced a coin destined for the retailer's address.
+In another use case, a business may wish to make public details of a donation to a charity without publicly disclosing its full view key.
+By providing a payment proof, anyone can verify that the specified coin was destined for the charity's address and confirm the value and memo associated to the coin.
 
 
 \section{Efficiency}
@@ -749,6 +761,7 @@ This protocol is complete, special sound, and special honest-verifier zero knowl
 
 
 \section{Payment System Security}
+\label{app:security}
  
 Zerocash \cite{zerocash} established a robust security framework for decentralized anonymous payment (DAP) scheme security that captures a realistic threat model with powerful adversaries who are permitted to add malicious coins into transactions' input ambiguity sets, control the choice of transaction inputs, and produce arbitrary transactions to add to a ledger.
 Here we formally prove Spark's security within a related (but modified) security model; proofs follow somewhat similarly to that of \cite{zerocash}.
@@ -1052,5 +1065,137 @@ Hence $\lvert \func{Adv}^{\mathcal{D}^{\text{sim}}} - \func{Adv}^{\mathcal{D}_2}
 
 This shows that the adversary has only negligible advantage in the real $\func{LIND}$ game over the simulation, where it can do no better than chance, which completes the proof.
 \end{proof}
+
+
+\section{Payment Proofs}
+\label{app:payment}
+
+We describe now the informal security properties required for a payment proving system, describe such a construction, and (informally) prove that our construction meets the requirements.
+
+The security requirements of a payment proving system are as follows:
+\begin{enumerate}
+    \item\label{pay:context} The proof cannot be replayed in a different context.
+    \item\label{pay:secret} The prover asserts that it knows the secret data used to generate a specified coin.
+    \item\label{pay:value_memo} The verifier can obtain and confirm the value and memo associated to the coin.
+    \item\label{pay:identify} The holder of an incoming view key corresponding to a specified public address can successfully identify the coin.
+    \item\label{pay:malicious} A computationally-bound adversary cannot produce valid proofs for the same coin claiming distinct public addresses.
+\end{enumerate}
+
+
+\subsection{Parallel representation proving system}
+
+To prove knowledge of the secret information used to produce a coin in our payment proving system, we require a sigma protocol for a parallel discrete logarithm representation proving system with functions $\func{ParallelRepProve}$ and $\func{ParallelRepVerify}$ for the following relation, where $pp_{\text{dcom}} = (\G,\F,F,G,H)$ are the double-masked Pedersen commitment public parameters used in the overall transaction protocol:
+$$\{pp_{\text{dcom}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1 ; k : K = kQ_0, K_{\text{der}} = kQ_1, K_{\text{div}} = kF \}$$
+This construction can be easily built using a standard Schnorr-type proving system:
+
+\begin{enumerate}
+    \item The prover chooses $r \in \F$ uniformly at random.
+    \item The prover computes the initial proof values
+    \begin{align*}
+        A_1 &= rQ_0 \\
+        A_2 &= rQ_1 \\
+        A_3 &= rF
+    \end{align*}
+    and sends them to the verifier.
+    \item The verifier chooses a challenge $c \in \F$ uniformly at random, and sends it to the prover.
+    \item The prover computes the response $t = r + ck$ and sends it to the verifier.
+    \item The verifier accepts the proof if and only if the following hold:
+    \begin{align*}
+        A_1 + cK &= tQ_0 \\
+        A_2 + cK_{\text{der}} &= tQ_1 \\
+        A_3 + cK_{\text{div}} &= tF
+    \end{align*}
+\end{enumerate}
+
+This proving system can easily be shown to be complete, special honest-verifier zero knowledge, and special sound; we omit the proof here for brevity.
+
+
+\subsection{Payment proving system}
+
+To produce a payment proof on a given coin $\func{Coin}$ to the claimed destination address $(Q_0,Q_1,Q_2)$, the prover does the following:
+\begin{enumerate}
+    \item Parses the recovery key preimage, serial number commitment, value commitment, and recovery key from $\func{Coin}$: $(k,S,C,K)$
+    \item Generates a parallel representation proof:
+    $$\Pi_{\text{dl}} = \func{ParallelRepProve}(pp_{\text{dcom}},K,kQ_0,kQ_1,kG,Q_0,Q_1 ; k)$$
+    When constructing this proof, the prover also binds $\func{Coin}$, $Q_2$, and any implementation-specific proof context.
+    \item Assembles the payment proof:
+    $$\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$$
+\end{enumerate}
+
+To verify a payment proof on a coin, the verifier does the following:
+\begin{enumerate}
+    \item Parses the payment proof: $\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$
+    \item Parses public data from $\func{Coin}$: $(S,C,K,\Pi_{\text{rec}},\overline{v},\overline{m})$
+    \item Verifies the parallel representation proof, and aborts if verification fails:
+    $$\func{ParallelRepVerify}(pp_{\text{dcom}},\Pi_{\text{dl}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1)$$
+    \item Verifies the diversifier representation proof, and aborts if verification fails:
+    $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,K_{\text{div}})$$
+    \item Checks that $S = \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0) + Q_2$, and aborts otherwise.
+    \item Generates an AEAD key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$ and decrypts the value and memo:
+    \begin{align*}
+        v &= \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v}) \\
+        m &= \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})
+    \end{align*}
+    If either decryption fails, aborts.
+    \item Checks that $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$, and aborts otherwise.
+\end{enumerate}
+
+
+\subsection{Security}
+
+We now describe why this construction meets our security requirements.
+
+\textbf{Requirement \ref{pay:context}}. To show that a payment proof cannot be replayed in another context, note that since proof context is bound to the transcript of $\Pi_{\text{dl}}$ along with the statement and coin data, the overall payment proof $\Pi_{\text{pay}}$ cannot be successfully replayed against any other context.
+
+\textbf{Requirement \ref{pay:secret}}. To show that successful verification of a payment proof asserts the prover knew the secret data used to produce the coin, observe that the special soundness of the parallel representation proving system for $\Pi_{\text{dl}}$ asserts that the prover knows a recovery key preimage $k \in \F$ for the coin; since $\G$ is cyclic, $k$ is unique for the given statement.
+
+\textbf{Requirement \ref{pay:value_memo}}. To show that the verifier can obtain the correct value and memo for the coin on successful verification of a payment proof, we simply note that successful AEAD decryption provides the unique values for the value and memo originally used to produce the coin, and that the decrypted value uniquely corresponds to the coin's value commitment since the commitment scheme is binding and successful verification implies an opening to this commitment.
+
+\textbf{Requirement \ref{pay:identify}}. We now show that the holder of the private view key $(s_1,P_1,P_2)$ corresponding to the address $(Q_0,Q_1,Q_2)$ can identify $\textsf{Coin}$ if a payment proof verifies.
+First note that successful verification shows the prover knows $k \in \F$ such that $K = kQ_0$ and $K_{\text{der}} = kQ_1$, so the following holds:
+\begin{align*}
+    S &= \hash_{\text{ser}}(K_{\text{der}})F + Q_2 \\
+    &= \hash_{\text{ser}}(kQ_1)F + Q_2 \\
+    &= \hash_{\text{ser}}(ks_1 Q_0)F + Q_2 \\
+    &= \hash_{\text{ser}}(s_1 K)F + Q_2
+\end{align*}
+Hence the view key holder will obtain a diversifier index when querying a diversifier lookup table produced with $(s_1,P_1,P_2)$ by construction.
+
+Verification of $\Pi_{\text{rec}}$ on the statement value $K_{\text{div}}$ asserts the following:
+\begin{align*}
+    K_{\text{div}} &= kF \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}k\hash_{Q_0}(s_1,i)F \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}kQ_0 \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}K
+\end{align*}
+Hence the view key holder will verify $\Pi_{\text{rec}}$ using $(1/\hash_{Q_0}(s_1,i))K$ as its statement value.
+
+We have already shown that $K_{\text{der}} = s_1 K$, so successful AEAD decryption by the verifier using a key derived from this value implies the view key holder obtains the same successful decryption and value commitment check.
+Therefore coin identification succeeds.
+
+\textbf{Requirement \ref{pay:malicious}}. We now show that a computationally-bound adversary cannot produce valid proofs against the same coin for distinct public addresses.
+Suppose such an adversary produces for the same coin valid payment proofs
+$$\Pi_{\text{pay}} = (\mathsf{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$$
+and
+$$\Pi_{\text{pay}}' = (\mathsf{Coin},K_{\text{der}}',K_{\text{div}}',Q_0',Q_1',Q_2',\Pi_{\text{dl}}')$$
+on addresses $(Q_0,Q_1,Q_2) \neq (Q_0',Q_1',Q_2')$.
+Note that $\mathsf{Coin} = (S,C,K,\Pi_{\text{rec}},\overline{v},\overline{m})$ must be identical in both proofs by definition.
+Since the parallel representation proving system is special sound, we can extract witnesses $k$ from $\Pi_{\text{dl}}$ and $k'$ from $\Pi_{\text{dl}}'$.
+
+Consider first the case where $k = k'$.
+In this case, $K = kQ_0 = k'Q_0'$ immediately yields $Q_0' = Q_0$.
+Since the AEAD keys derived from both proofs successfully decrypt $\overline{v}$ and $\overline{m}$, we must have $K_{\text{der}} = K_{\text{der}}'$ except with negligible probability where $K_{\text{der}} = kQ_1$ and $K_{\text{der}}' = k'Q_1'$, so $Q_1' = Q_1$.
+Finally, since
+\begin{align*}
+S &= \hash_{\text{ser}}(K_{\text{der}})F + Q_2 \\
+&= \hash_{\text{ser}}(K_{\text{der}}')F + Q_2'
+\end{align*}
+and $K_{\text{der}} = K_{\text{der}}'$, we must have $Q_2' = Q_2$.
+Hence $(Q_0,Q_1,Q_2) = (Q_0',Q_1',Q_2')$, a contradiction.
+
+Now consider the case where $k \neq k'$.
+Since $\Pi_{\text{rec}}$ verifies using both $K_{\text{div}}$ and $K_{\text{div}}'$ as statement values, these values must be equal except with negligible probability.
+However, $K_{\text{div}} = kF$ and $K_{\text{div}}' = k'F$ and $k \neq k'$, a contradiction.
+
 
 \end{document}
