@@ -12,7 +12,7 @@
 \newcommand{\func}[1]{\mathsf{#1}}
 \newcommand{\addr}{\func{addr}}
 \newcommand{\com}{\func{Com}}
-\newcommand{\dcom}{\func{DCom}}
+\newcommand{\comm}{\func{Comm}}
 
 
 \begin{document}
@@ -79,8 +79,8 @@ The commitment scheme contains an algorithm $\com: \F^2 \to \G$, where $\com(v,r
 Further, the construction is perfectly hiding and computationally binding.
 
 This definition extends naturally to a double-masked commitment scheme.
-Let $pp_{\text{dcom}} = (\G, \F, F, G, H)$ be the public parameters for a double-masked Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H \in \G$ are uniformly-sampled independent generators.
-The commitment scheme contains an algorithm $\dcom: \F^3 \to \G$, where $\dcom(v,r,s) = vF + rG + sH$ that is homomorphic in the sense that $$\dcom(v_1,r_1,s_1) + \dcom(v_2,r_2,s_2) = \dcom(v_1 + v_2,r_1 + r_2,s_1 + s_2)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2,s_1,s_2 \in \F$.
+Let $pp_{\text{comm}} = (\G, \F, F, G, H)$ be the public parameters for a double-masked Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H \in \G$ are uniformly-sampled independent generators.
+The commitment scheme contains an algorithm $\comm: \F^3 \to \G$, where $\comm(v,r,s) = vF + rG + sH$ that is homomorphic in the sense that $$\comm(v_1,r_1,s_1) + \comm(v_2,r_2,s_2) = \comm(v_1 + v_2,r_1 + r_2,s_1 + s_2)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2,s_1,s_2 \in \F$.
 Further, the construction is perfectly hiding and computationally binding.
 
 
@@ -91,6 +91,8 @@ Let $pp_{\text{rep}} = (\G, \F)$ be the public parameters for such a constructio
 
 The proving system itself is a tuple of algorithms $(\func{RepProve},\func{RepVerify})$ for the following relation:
 $$\left\{ pp_{\text{rep}}, G, X \in \G ; x \in \F : X = xG \right\}$$
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound; these definitions are standard \cite{groth}.
 
 The well-known Schnorr proving system may be used for this purpose.
 
@@ -103,6 +105,8 @@ Let $pp_{\text{chaum}} = (\G, \F, F, G, H, U)$ be the public parameters for such
 
 The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerify})$ for the following relation:
 $$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
 We present an instantiation of such a proving system in Appendix \ref{app:chaum}, along with security proofs.
 
@@ -121,6 +125,8 @@ The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVe
 \left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
+
 We present an instantiation of such a proving system in Appendix \ref{app:parallel}.
 
 
@@ -136,7 +142,7 @@ The algorithm $\func{AEADEncrypt}$ accepts as input a key, associated data, and 
 The algorithm $\func{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
 For the purposes of this protocol, we may assume the use of a fixed nonce, as keys are used uniquely with given associated data.
 
-Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context.
+Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context \cite{keyprivacy}.
 
 
 \subsection{Range Proving System}
@@ -148,6 +154,8 @@ Let $pp_{\text{rp}} = (\G, \F, v_{\text{max}}, pp_{\text{com}})$ be the relevant
 
 The proving system itself is a tuple of algorithms $(\func{RangeProve},\func{RangeVerify})$ for the following relation:
 $$\left\{ pp_{\text{rp}}, C \in \G ; (v, r) \in \F : 0 \leq v \leq v_{\text{max}}, C = \com(v,r) \right\}$$
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
 In practice, an efficient instantiation like Bulletproofs \cite{bp} or Bulletproofs+ \cite{bp_plus} may be used to satisfy this requirement.
 
@@ -230,7 +238,7 @@ In practice, these generators may be chosen using a suitable cryptographic hash 
 \item Sample cryptographic hash functions $$\hash_{Q_0},\hash_{Q_2},\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
 In practice, these hash functions may be chosen using domain separation of a single suitable cryptographic hash function.
 \item Compute the public parameters $pp_{\text{com}} = (\G,\F,G,H)$ of a Pedersen commitment scheme.
-\item Compute the public parameters $pp_{\text{dcom}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
+\item Compute the public parameters $pp_{\text{comm}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
 \item Compute the public parameters $pp_{\text{rep}} = (\G,\F)$ of a representation proving system.
 \item Compute the public parameters $pp_{\text{chaum}} = (\G,\F,F,G,H,U)$ of the modified Chaum-Pedersen proving system.
 \item Compute the public parameters $pp_{\text{par}} = (\G,\F,n,m,pp_{\text{com}})$ of the parallel one-out-of-many proving system.
@@ -249,8 +257,8 @@ We describe the construction of key types used in the protocol.
 \textbf{Outputs:} Key tuple $(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
 
 \begin{enumerate}
-\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \dcom(0, r, 0)$.
-\item Compute $P_1 = \dcom(s_1, 0, 0)$ and $P_2 = \dcom(s_2, r, 0)$.
+\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \comm(0, r, 0)$.
+\item Compute $P_1 = \comm(s_1, 0, 0)$ and $P_2 = \comm(s_2, r, 0)$.
 \item Set $\addr_{\text{base}} = (P_1, P_2)$.
 \item Set $\addr_{\text{in}} = (s_1, P_1, P_2)$.
 \item Set $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
@@ -276,9 +284,9 @@ Diversified public addresses share the same set of keys for efficiency purposes,
 \item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
 \item Compute the diversified address components:
 \begin{align*}
-Q_{0,i} &= \dcom(\hash_{Q_0}(s_1,i),0,0) \\
+Q_{0,i} &= \comm(\hash_{Q_0}(s_1,i),0,0) \\
 Q_{1,i} &= s_1 Q_{0,i} \\
-Q_{2,i} &= \dcom(\hash_{Q_2}(s_1,i),0,0) + P_2
+Q_{2,i} &= \comm(\hash_{Q_2}(s_1,i),0,0) + P_2
 \end{align*}
 \item Add a mapping entry $Q_{2,i} \mapsto i$ in $\func{AddrTable}$ if it does not already exist.
 \item Set $\addr_{\text{pk}} = (Q_{0,i},Q_{1,i},Q_{2,i})$ and output this tuple.
@@ -300,7 +308,7 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \item Sample $k \in \F$.
 \item Compute the recovery key $K = kQ_0$ and derived recovery key $K_{\text{der}} = kQ_1$.
 \item Generate a representation proof: $$\Pi_{\text{rec}} = \func{RepProve}(pp_{\text{rep}},F,kF ; k)$$
-\item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(K_{\text{der}}), 0, 0) + Q_2.$$
+\item Compute the serial number commitment $$S = \comm(\hash_{\text{ser}}(K_{\text{der}}), 0, 0) + Q_2.$$
 \item Generate the value commitment $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$.
 \item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \func{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(K_{\text{der}}))).$$
 \item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; encrypt the value $$\overline{v} = \func{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$$ (if $b=0$) and memo $$\overline{m} = \func{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m).$$
@@ -342,7 +350,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\func{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
-\item Query $\func{AddrTable}$ on the value $S - \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(s_1 K)$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
@@ -364,7 +372,7 @@ If the coin is not destined for a known diversified address, the algorithm retur
 \item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
 \item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
-\item Query $\func{AddrTable}$ on the value $S - \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
 \item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(s_1 K)$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
@@ -401,7 +409,7 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
-        \item Compute the serial number commitment offset: $$S_u' = \dcom(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
+        \item Compute the serial number commitment offset: $$S_u' = \comm(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
         \item Compute the value commitment offset: $$C_u' = \com(v_u, \hash_{\text{val}'}(s_u, D))$$
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
@@ -417,7 +425,7 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \left. \sum_{u=0}^{w-1} \hash_{\text{val}'}(s_u,D) - \sum_{j=0}^{t-1} \hash_{\text{val}}(k_j(Q_1)_j) \right)
     \end{multline*}
     \item Let $\mu = \hash_{\text{bind}}( \func{InCoins}, \func{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
-    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \func{ChaumProve}(pp_{\text{chaum}},S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D)))$$
+    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \func{ChaumProve}(pp_{\text{chaum}}, \mu, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D)))$$
     \item Output the tuple:
     \begin{multline*}
     \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
@@ -462,7 +470,7 @@ If the input transaction is a spend transaction:
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
-        \item Check that $\func{ChaumVerify}(pp_{\text{chaum}},(\Pi_{\text{chaum}})_u,S_u',T_u)$, and output 0 if this fails.
+        \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}(pp_{\text{chaum}},\mu,(\Pi_{\text{chaum}})_u,S_u',T_u),$$ and output 0 if this fails.
     \end{enumerate}
     \item For each $j \in [0,t)$, check that $\func{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
@@ -476,6 +484,7 @@ If the input transaction is a spend transaction:
 Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
 We describe a method for signing groups to perform the $\func{CreateKeys}$ and $\func{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
 This method uses techniques from \cite{musig,schnorr,schnorrwithschnorr}.
+We defer a complete security analysis to future work.
 
 Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
 Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
@@ -510,7 +519,7 @@ To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the f
         s_2 &= \sum_{\beta=1}^\nu \hash_{s_2}(\{s_{2,\gamma}\}_{\gamma=1}^\nu,\beta)s_{2,\beta}
     \end{align*}
 \end{enumerate}
-Using the tuple $(s_1,s_2,D)$, any player can additionally compute the base key components $P_1 = \dcom(s_1,0,0)$ and $P_2 = \dcom(s_2,0,0) + D$.
+Using the tuple $(s_1,s_2,D)$, any player can additionally compute the base key components $P_1 = \comm(s_1,0,0)$ and $P_2 = \comm(s_2,0,0) + D$.
 Since each player holds the aggregate incoming view key, it can compute public addresses using $\func{CreateAddress}$ as needed.
 
 \begin{remark}
@@ -793,9 +802,9 @@ It is straightforward to show this property holds.
 Successful execution of either the $\func{Identify}$ or $\func{Recover}$ algorithms implies in particular the verification $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ for some diversifier $i$ obtained from the algorithms during a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $$K = k\hash_{Q_0}(s_1,i)F = kQ_{0,i}.$$
 Hence the serial number commitment can be expressed as follows:
 \begin{align*}
-S &= \dcom(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
-&= \dcom(\hash_{\text{ser}}(s_1 kQ_{0,i}), 0, 0) + Q_{2,i} \\
-&= \dcom(\hash_{\text{ser}}(kQ_{1,i}), 0, 0) + Q_{2,i}
+S &= \comm(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
+&= \comm(\hash_{\text{ser}}(s_1 kQ_{0,i}), 0, 0) + Q_{2,i} \\
+&= \comm(\hash_{\text{ser}}(kQ_{1,i}), 0, 0) + Q_{2,i}
 \end{align*}
 Since diversified address components are produced using queries against independent cryptographic hash functions on the incoming view key $s_1$ and diversifier index $i$, they are unique and the desired binding holds.
 \end{remark}
@@ -863,9 +872,9 @@ Validity of the modified Chaum-Pedersen proofs $(\Pi_{\text{chaum}})_{u_1}$ and 
 Because transaction validity implies $T_{u_1} \neq T_{u_2}$, we must have $(s_{u_1},r_{u_1}) \neq (s_{u_2},r_{u_2})$.
 Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to input set group elements $S_1$ and $S_2$) and discrete logarithm extractions such that $S_1 - S_{u_1}' = x_{u_1} H$ and $S_2 - S_{u_2}' = x_{u_2} H$.
 This means
-$$S_1 = \dcom(s_{u_1},r_{u_1},x_{u_1}+y_{u_1})$$
+$$S_1 = \comm(s_{u_1},r_{u_1},x_{u_1}+y_{u_1})$$
 and
-$$S_2 = \dcom(s_{u_2},r_{u_2},x_{u_2}+y_{u_2})$$
+$$S_2 = \comm(s_{u_2},r_{u_2},x_{u_2}+y_{u_2})$$
 which contradicts the assumption of unique partial openings for consumed coin serial number commitments.
 
 The second possibility for violation of the condition is that the transaction $\text{tx}_{\text{spend}}$ consumes a coin that is not generated in any previous valid transaction.
@@ -1084,8 +1093,8 @@ The security requirements of a payment proving system are as follows:
 
 \subsection{Parallel representation proving system}
 
-To prove knowledge of the secret information used to produce a coin in our payment proving system, we require a sigma protocol for a parallel discrete logarithm representation proving system with functions $\func{ParallelRepProve}$ and $\func{ParallelRepVerify}$ for the following relation, where $pp_{\text{dcom}} = (\G,\F,F,G,H)$ are the double-masked Pedersen commitment public parameters used in the overall transaction protocol:
-$$\{pp_{\text{dcom}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1 ; k : K = kQ_0, K_{\text{der}} = kQ_1, K_{\text{div}} = kF \}$$
+To prove knowledge of the secret information used to produce a coin in our payment proving system, we require a sigma protocol for a parallel discrete logarithm representation proving system with functions $\func{ParallelRepProve}$ and $\func{ParallelRepVerify}$ for the following relation, where $pp_{\text{comm}} = (\G,\F,F,G,H)$ are the double-masked Pedersen commitment public parameters used in the overall transaction protocol:
+$$\{pp_{\text{comm}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1 ; k : K = kQ_0, K_{\text{der}} = kQ_1, K_{\text{div}} = kF \}$$
 This construction can be easily built using a standard Schnorr-type proving system:
 
 \begin{enumerate}
@@ -1116,7 +1125,7 @@ To produce a payment proof on a given coin $\func{Coin}$ to the claimed destinat
 \begin{enumerate}
     \item Parses the recovery key preimage, serial number commitment, value commitment, and recovery key from $\func{Coin}$: $(k,S,C,K)$
     \item Generates a parallel representation proof:
-    $$\Pi_{\text{dl}} = \func{ParallelRepProve}(pp_{\text{dcom}},K,kQ_0,kQ_1,kG,Q_0,Q_1 ; k)$$
+    $$\Pi_{\text{dl}} = \func{ParallelRepProve}(pp_{\text{comm}},K,kQ_0,kQ_1,kG,Q_0,Q_1 ; k)$$
     When constructing this proof, the prover also binds $\func{Coin}$, $Q_2$, and any implementation-specific proof context.
     \item Assembles the payment proof:
     $$\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$$
@@ -1127,10 +1136,10 @@ To verify a payment proof on a coin, the verifier does the following:
     \item Parses the payment proof: $\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$
     \item Parses public data from $\func{Coin}$: $(S,C,K,\Pi_{\text{rec}},\overline{v},\overline{m})$
     \item Verifies the parallel representation proof, and aborts if verification fails:
-    $$\func{ParallelRepVerify}(pp_{\text{dcom}},\Pi_{\text{dl}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1)$$
+    $$\func{ParallelRepVerify}(pp_{\text{comm}},\Pi_{\text{dl}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1)$$
     \item Verifies the diversifier representation proof, and aborts if verification fails:
     $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,K_{\text{div}})$$
-    \item Checks that $S = \dcom(\hash_{\text{ser}}(K_{\text{der}}),0,0) + Q_2$, and aborts otherwise.
+    \item Checks that $S = \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0) + Q_2$, and aborts otherwise.
     \item Generates an AEAD key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$ and decrypts the value and memo:
     \begin{align*}
         v &= \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v}) \\
