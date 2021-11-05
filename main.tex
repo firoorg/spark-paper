@@ -3,6 +3,7 @@
 \pagestyle{plain}
 
 \usepackage{amsmath,amssymb,amsfonts}
+\usepackage{mathtools}
 \usepackage{bookmark}
 \setcounter{tocdepth}{3}
 
@@ -100,11 +101,14 @@ The well-known Schnorr proving system may be used for this purpose.
 \subsection{Modified Chaum-Pedersen Proving System}
 
 A Chaum-Pedersen proof is used to demonstrate discrete logarithm equality in zero knowledge.
-Here we require a modification to the standard proving system that uses additional group generators.
+Here we require a modification to the standard proving system that uses additional group generators and supports multiple assertions within a single proof.
 Let $pp_{\text{chaum}} = (\G, \F, F, G, H, U)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H,U \in \G$ are uniformly-sampled independent generators.
 
 The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
+\begin{multline*}
+\left\{ pp_{\text{chaum}}, \{S_i, T_i\}_{i=0}^{l-1} \subset \G^2 ; (\{x_i, y_i, z_i\}_{i=0}^{l-1}) \subset \F^3 : \right. \\
+\left. \forall i \in [0,l), S_i = x_i F + y_i G + z_i H, U = x_i T_i + y_i G \right\}
+\end{multline*}
 
 We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
@@ -425,11 +429,15 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \left. \sum_{u=0}^{w-1} \hash_{\text{val}'}(s_u,D) - \sum_{j=0}^{t-1} \hash_{\text{val}}(k_j(Q_1)_j) \right)
     \end{multline*}
     \item Let $\mu = \hash_{\text{bind}}( \func{InCoins}, \func{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
-    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \func{ChaumProve}(pp_{\text{chaum}}, \mu, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D)))$$
+    \item Generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript:
+    \begin{multline*}
+    \Pi_{\text{chaum}} = \func{ChaumProve}((pp_{\text{chaum}}, \mu), \{S_u', T_u\}_{u=0}^{w-1}; \\
+    (\{s_u, r, -\hash_{\text{ser}'}(s_u, D)\}_{u=0}^{w-1}))
+    \end{multline*}
     \item Output the tuple:
     \begin{multline*}
     \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, (\Pi_{\text{chaum}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
 \end{enumerate}
 
@@ -462,7 +470,7 @@ If the input transaction is a spend transaction:
     \item Parse the transaction:
     \begin{multline*}
     \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, (\Pi_{\text{chaum}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
     \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
     \item Parse the output coin value commitments and range proofs $\{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
@@ -470,8 +478,8 @@ If the input transaction is a spend transaction:
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
-        \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}(pp_{\text{chaum}},\mu,(\Pi_{\text{chaum}})_u,S_u',T_u),$$ and output 0 if this fails.
     \end{enumerate}
+    \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}((pp_{\text{chaum}},\mu),\Pi_{\text{chaum}},\{S_u',T_u\}_{u=0}^{w-1}),$$ and output 0 if this fails.
     \item For each $j \in [0,t)$, check that $\func{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
     \item Check that $$\func{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
@@ -548,30 +556,30 @@ To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ eng
 
 \subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
-Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
+Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except the modified Chaum-Pedersen proof.
 We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
-$$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
+$$\{pp_{\text{chaum}}, \{S_u', T_u\}_{u=0}^{w-1}; (\{s_u, r, -\hash_{\text{ser}'}(s_u, D)\}_{u=0}^{w-1})\}$$
 
 For the sake of notation convenience, we assume that the signing players are indexed $1 \leq \alpha \leq t$.
-Further, assume that each nonce list $L_\alpha$ contains $k + 1$ unused nonces.
+Further, assume that each nonce list $L_\alpha$ contains $k + 1 \geq w$ unused nonces.
 We also assume the context binding value $\mu$ has been defined.
 Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-    \item Parses the next available set of nonces $(d_{\beta,k}G,e_{\beta,k}G)$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute the following value:
-    $$\rho = \hash_{\rho}(\{\beta,d_{\beta,k}G,e_{\beta,k}G\}_{\beta=1}^{t},\mu,S_u',T_u)$$
+    \item Parses the next available set of nonces $\{(d_{\beta,k-u}G,e_{\beta,k-u}G)\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute the following values:
+    $$\rho_u = \hash_{\rho}(\{\beta,d_{\beta,k-u}G,e_{\beta,k-u}G\}_{\beta=1}^{t},\mu,S_u',T_u)$$
     \item Sets the initial proof commitments:
     \begin{align*}
-        A_1 &= \hash_F(\rho)F + \hash_H(\rho)H + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho e_{\beta,k}G \right) \\
-        A_2 &= \hash_F(\rho)T_u + \sum_{\beta=1}^t \left( d_{\beta,k}G + \rho e_{\beta,k}G \right)
+        A_1 &= \sum_{u=0}^{w-1} \left( \hash_F(\rho_u)F + \hash_H(\rho_u)H + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right) \\
+        \{A_{2,u}\}_{u=0}^{w-1} &= \left\{ \hash_F(\rho_u)T_u + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right\}
     \end{align*}
-    \item Computes the challenge $c$ using the proof transcript as in the original $\text{Spend}$ description.
-    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $t_{2,\alpha} = d_{\alpha,k} + \rho e_{\alpha,k} + \lambda_\alpha r_\alpha c$, and sends $t_{2,\alpha}$ to the other signing players.
-    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = d_{\beta,k}G + \rho e_{\beta,k}G + c\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j}$$ and aborts otherwise.
+    \item Computes the challenge $c$ using the proof transcript as in the original $\func{Spend}$ description.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $$t_{2,\alpha} = \sum_{u=0}^{w-1} (d_{\alpha,k-u} + \rho_u e_{\alpha,k-u} + \lambda_\alpha r_\alpha c^u),$$ and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( d_{\beta,k-u}G + \rho_u e_{\beta,k-u}G + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
-        t_1 &= \hash_F(\rho) + cs_u \\
+        \{t_{1,u}\}_{u=0}^{w-1} &= \{ \hash_F(\rho_u) + c^u s_u \} \\
         t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
-        t_3 &= \hash_H(\rho) - c\hash_{\text{ser}'}(s_u,D)
+        t_3 &= \sum_{u=0}^{w-1} (\hash_H(\rho_u) - c^u \hash_{\text{ser}'}(s_u,D))
     \end{align*}
 \end{enumerate}
 
@@ -594,7 +602,7 @@ In the case where an address is used in threshold multisignature operations, a c
 
 Further, the full view key is used in $\func{Spend}$ to generate one-out-of-many proofs.
 Since the parallel one-out-of-many proof used in Spark can be computationally expensive, it may be unsuitable for generation by a computationally-limited device like a hardware wallet.
-Providing this key to a more powerful device enables easy generation of this proof (and other transaction components like range proofs), while ensuring that only the device holding the spend key can complete the transaction by generating the simple modified Chaum-Pedersen proofs.
+Providing this key to a more powerful device enables easy generation of this proof (and other transaction components like range proofs), while ensuring that only the device holding the spend key can complete the transaction by generating the simple modified Chaum-Pedersen proof.
 
 Payment proofs, which we introduce in Appendix \ref{app:payment}, allow for disclosure of data for individual coins.
 Specifically, a payment proof asserts in zero knowledge that the prover knows the secret data used to generate a given coin that is destined for a given public address.
@@ -628,12 +636,12 @@ Note that we do not include input ambiguity set references in this data, as this
         $f$ & & & & $8$ \\
         $\Pi_{\text{rp}}$ & Bulletproofs+ & $2 \lceil \lg(64t) \rceil + 3$ & $3$ & \\
         $\Pi_{\text{bal}}$ & Schnorr (short)& & $1.5$ & \\
+        $\Pi_{\text{chaum}}$ & this paper & $w + 1$ & $w + 2$ & \\
         \hline
         \multicolumn{5}{|c|}{Input data ($w$ coins)} \\
         \hline
         $(S',C')$ & & $2w$ & & \\
         $\Pi_{\text{par}}$ & this paper & $(2m + 4)w$ & $[m(n-1) + 4]w$ & \\
-        $\Pi_{\text{chaum}}$ & this paper & $2w$ & $3w$ & \\
         \hline
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
@@ -660,7 +668,7 @@ Table \ref{table:time} shows the verification batch complexity in terms of total
         \hline
         Parallel one-out-of-many & $B[w(2m + 6) + 2m^m] + m^n + 1$ \\
         Bulletproofs+ & $B(t + 2\lg(64t) + 3) + 128T + 2$ \\
-        Modified Chaum-Pedersen & $B(4w) + 4$ \\
+        Modified Chaum-Pedersen & $B(3w + 1) + 4$ \\
         Schnorr & $B(w + t + 1) + 2$ \\
         \hline
     \end{tabular}
@@ -687,34 +695,75 @@ The authors gratefully acknowledge Nikolas Kr\"{a}tzschmar for identifying an ea
 \label{app:chaum}
 
 The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
-
+\begin{multline*}
+\left\{ pp_{\text{chaum}}, \{S_i, T_i\}_{i=0}^{l-1} \subset \G^2 ; (\{x_i, y_i, z_i\}_{i=0}^{l-1}) \subset \F^3 : \right. \\
+\left. \forall i \in [0,l), S_i = x_i F + y_i G + z_i H, U = x_i T_i + y_i G \right\}
+\end{multline*}
 The protocol proceeds as follows:
 \begin{enumerate}
-    \item The prover selects random $r,s,t \in \F$.
-    It computes $$(A_1, A_2) := (rF + sG + tH, rT + sG)$$ and sends these values to the verifier.
+    \item The prover selects random $\{r_i,s_i\}_{i=0}^{l-1}, t \in \F$.
+    It computes the values
+    \begin{align*}
+        A_1 &= \sum_{i=0}^{l-1} r_i F + \sum_{i=0}^{l-1} s_i G + tH \\
+        \{A_{2,i}\}_{i=0}^{l-1} &= \{r_i T_i + s_i G\}_{i=0}^{l-1}
+    \end{align*}
+    and sends these values to the verifier.
     \item The verifier selects a random challenge $c \in \F$ and sends it to the prover.
-    \item The prover computes responses $$(t_1, t_2, t_3) := (r + cx, s + cy, t + cz)$$ and sends these values to the verifier.
-    \item The verifier accepts the proof if and only if $$A_1 + cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
+    \item The prover computes responses
+    \begin{align*}
+        \{t_{1,i}\}_{i=0}^{l-1} &= \{r_i + c^i x_i\}_{i=0}^{l-1} \\
+        t_2 &= \sum_{i=0}^{l-1} (s_i + c^i y_i) \\
+        t_3 &= t + \sum_{i=0}^{l-1} c^i z_i
+    \end{align*}
+    and sends them to the verifier.
+    \item The verifier accepts the proof if and only if $$A_1 + \sum_{i=0}^{l-1} c^i S_i = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H$$ and $$\sum_{i=0}^{l-1} (A_{2,i} + c^i U) = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G.$$
 \end{enumerate}
 
 We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
 
 \begin{proof}
-Completeness of this protocol follows trivially by inspection.
+Completeness of the protocol follows by inspection.
+
+We now show it is (l+1)-special sound by building a polynomial-time extractor as follows.
+Given a statement and initial proof transcript $(A_1, \{A_{2_i}\}_{i=0}^{l-1})$, the verifier sends $l+1$ distinct challenge values $c_0, c_1, \ldots, c_l$ and receives the corresponding transcript values $(\{t^0_{1,i}\}_{i=0}^{l-1}, t^0_2, t^0_3), \ldots, (\{t^l_{1,i}\}_{i=0}^{l-1}, t^l_2, t^l_3)$ from the prover.
+From the first verification equation, we build the following linear system:
+\begin{align*}
+A_1 + \sum_{i=0}^{l-1} c_0^i S_i &= \sum_{i=0}^{l-1} t^0_{1,i} F + t^0_2 G + t^0_3 H \\
+A_1 + \sum_{i=0}^{l-1} c_1^i S_i &= \sum_{i=0}^{l-1} t^1_{1,i} F + t^1_2 G + t^1_3 H \\
+&\vdotswithin{=} \\
+A_1 + \sum_{i=0}^{l-1} c_l^i S_i &= \sum_{i=0}^{l-1} t^l_{1,i} F + t^l_2 G + t^l_3 H
+\end{align*}
+
+Subtracting the first equation from the rest, we obtain another linear system:
+\begin{gather}
+\begin{aligned}
+\label{eqn:chaum}
+\sum_{i=0}^{l-1} (c_1^i - c_0^i) S_i &= \sum_{i=0}^{l-1} (t^1_{1,i} - t^0_{1,i})F + (t^1_2 - t^0_2)G + (t^1_3 - t^0_3)H \\
+\sum_{i=0}^{l-1} (c_2^i - c_0^i) S_i &= \sum_{i=0}^{l-1} (t^2_{1,i} - t^0_{1,i})F + (t^2_2 - t^0_2)G + (t^2_3 - t^0_3)H \\
+&\vdotswithin{=} \\
+\sum_{i=0}^{l-1} (c_l^i - c_0^i) S_i &= \sum_{i=0}^{l-1} (t^l_{1,i} - t^0_{1,i})F + (t^l_2 - t^0_2)G + (t^l_3 - t^0_3)H
+\end{aligned}
+\end{gather}
+
+Finally, we let the set $\{x_i\}_{i=0}^{l-1} \subset \F$ be defined through the following linear system:
+\begin{align*}
+\sum_{i=0}^{l-1} (c_1^i - c_0^i)x_i &= \sum_{i=0}^{l-1} (t^1_{1,i} - t^0_{1_i}) \\
+\sum_{i=0}^{l-1} (c_2^i - c_0^i)x_i &= \sum_{i=0}^{l-1} (t^2_{1,i} - t^0_{1_i}) \\
+&\vdotswithin{=} \\
+\sum_{i=0}^{l-1} (c_l^i - c_0^i)x_i &= \sum_{i=0}^{l-1} (t^l_{1,i} - t^0_{1_i})
+\end{align*}
+Since each challenge is uniformly distributed at random, the square coefficient matrix corresponding to the system has nonzero determinant except with negligible probability, and hence the system is solvable for all $\{x_i\}_{i=0}^{l-1}$.
+Further, we can form similar linear systems to define corresponding $\{y_i\}_{i=0}^{l-1}$ and $\{z_i\}_{i=0}^{l-1}$ such that we let $S_i = x_i F + y_i G + z_i H$ and the equations in system \ref{eqn:chaum} hold.
+
+It remains to show that these solutions are unique; that is, that no $S_i$ has a different representation with coefficients $x_i',y_i',z_i'$ consistent with successful verification.
+If this were the case, then we must have the polynomial equation $\sum_{i=0}^{l-1} c^i(x_i - x_i') = 0$ in $c$; however, since $c$ is selected randomly by the verifier, all coefficients of the polynomial must (with overwhelming probability) be zero by the Schwartz-Zippel lemma.
+Hence each $x_i = x_i'$ (and by the same reasoning, $y_i = y_i'$ and $z_i = z_i'$), and the extracted witness set is unique.
 
 To show the protocol is special honest-verifier zero knowledge, we construct a valid simulator producing transcripts identically distributed to those of valid proofs.
-The simulator chooses a random challenge $c \in \F$ and random scalar values $t_1, t_2, t_3 \in \F$.
-It sets $A_1 := t_1 F + t_2 G + t_3 H - cS$ and $A_2 := t_1 T + t_2 H - cU$.
+The simulator chooses a random challenge $c \in \F$ and random values $\{t_{1,i}\}_{i=0}^{l-1}, t_2, t_3 \in \F$.
+It also randomly selects $\{A_{2,i}\}_{i=1}^{l-1} \in \G$, and sets $$A_1 = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H - \sum_{i=0}^{l-1} c^i S_i$$ and $$A_{2,0} = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G - \sum_{i=1}^{l-1} A_{2,i} -  \sum_{i=0}^{l-1} c^i U).$$
 Such a transcript will be accepted by an honest verifier.
 Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H,U$ are independent, as are transcript elements produced by the simulator.
-
-To show the protocol is special sound, consider two accepting transcripts with distinct challenge values $c \neq c' \in \F$:
-$$(A_1, A_2, c, t_1, t_2, t_3)$$
-and
-$$(A_1, A_2, c', t'_1, t'_2, t'_3)$$
-The first verification equation applied to the two transcripts implies that $$(c - c')S = (t_1 - t'_1)F + (t_2 - t'_2)G + (t_3 - t'_3)H,$$ so we extract the witness values $x := (t_1 - t'_1)/(c - c')$ and $y := (t_2 - t'_2)/(c - c')$ and $z := (t_3 - t'_3)/(c - c')$, or a nontrivial discrete logarithm relation between $F,G,H$ (a contradiction if these generators are independent).
-Similarly, the second verification equation implies that $$(c - c')U = (t_1 - t'_1)T + (t_2 - t'_2)G,$$ yielding the same values for $x$ and $y$ as required.
 
 This completes the proof.
 \end{proof}
@@ -868,7 +917,7 @@ By way of contradiction, assume the adversary $\mathcal{A}$ interacts with $\mat
 Each $\text{tx}_{\text{spend}}$ generated by a non-$\func{Insert}$ oracle query satisfies this condition already, so there must exist a transaction $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ inserted by $\mathcal{A}$.
 
 Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin; that is, reveal the same partial opening $(s,r,-)$ of coin serial number commitments.
-Validity of the modified Chaum-Pedersen proofs $(\Pi_{\text{chaum}})_{u_1}$ and $(\Pi_{\text{chaum}})_{u_2}$ for these inputs gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
+Validity of the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
 Because transaction validity implies $T_{u_1} \neq T_{u_2}$, we must have $(s_{u_1},r_{u_1}) \neq (s_{u_2},r_{u_2})$.
 Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to input set group elements $S_1$ and $S_2$) and discrete logarithm extractions such that $S_1 - S_{u_1}' = x_{u_1} H$ and $S_2 - S_{u_2}' = x_{u_2} H$.
 This means
@@ -899,7 +948,7 @@ If instead the augmented ledger $(L, \vec{a})$ contains a mint transaction that 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:honest}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:honest} is non-negligible.
 That is, $\mathcal{A}$ produces a spend transaction $\text{tx}_{\text{spend}}$ by an $\func{Insert}$ question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_0, Q_1, Q_2) \in \func{ADDR}$.
 
-Validity of the Chaum-Pedersen proof corresponding to this input of $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
+Validity of the Chaum-Pedersen proof corresponding to $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
 Validity of the corresponding parallel one-of-many proof gives a serial number commitment $S$ and extraction such that $S - S' = xH$, so $S = s'F + r'G + (x + y)H$.
 
 Now let $(s_1,s_2,r)$ be the spend key corresponding to the address $(Q_0,Q_1,Q_2)$.
@@ -941,7 +990,7 @@ Assume that the adversary $\mathcal{A}$ wins the game with non-negligible probab
 That is, $\mathcal{A}$ produces a transaction $\text{tx}'$ revealing a tag $T$ also revealed in a transaction $\text{tx}$.
 Without loss of generality, assume each transaction consumes a single coin.
 
-Observe that a valid spend binds all transaction elements except for modified Chaum-Pedersen proofs into each such proof via $\hash_{\text{bind}}$ and the proof transcripts.
+Observe that a valid spend binds all transaction elements except for the modified Chaum-Pedersen proof into each such proof via $\hash_{\text{bind}}$ and the proof transcripts.
 Therefore, in order to produce valid $\text{tx}' \neq \text{tx}$, we consider two cases:
 \begin{itemize}
     \item the modified Chaum-Pedersen proofs are identical, but $\text{tx}'$ and $\text{tx}$ differ in another element of the transaction structures; or
@@ -1050,7 +1099,7 @@ Depending on the query type, the challenger acts as follows:
             \end{enumerate}
         \end{enumerate}
         \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $$\left(\sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0)\right).$$
-        \item For each $u \in [0,w)$, computes the binding hash $\mu$ as defined and simulates a modified Chaum-Pedersen proof $(\Pi_{\text{chaum}})_u$ on the statement $(S_u', T_u)$.
+        \item For each $u \in [0,w)$, computes the binding hash $\mu$ as defined and simulates the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ on the statement $(\{S_u', T_u\}_{u=0}^{w-1})$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
     \end{enumerate}
 \end{itemize}
@@ -1059,7 +1108,7 @@ For experiments defined below, we define $\func{Adv}^{\mathcal{D}}$ as the advan
 By definition, all answers sent to $\mathcal{A}$ in $\mathcal{D}^{\text{sim}}$ are computed independently of the bit $b$, so $\func{Adv}^{\mathcal{D}^{\text{sim}}} = 0$. We will prove that $\mathcal{A}$'s advantage in the real experiment $\mathcal{D}^{\text{real}}$ is at most negligibly different than $\mathcal{A}$'s advantage in $\mathcal{D}^{\text{sim}}$.
 To show this, we construct intermediate experiments in which $\mathcal{C}$ performs a specific modification of $\mathcal{D}^{\text{real}}$ against $\mathcal{A}$.
 
-\textbf{Experiment $\mathcal{D}_1$}: This experiment modifies $\mathcal{D}^{\text{real}}$ by simulating all one-out-of-many proofs, range proofs, representation proofs, and modified Chaum-Pedersen proofs.
+\textbf{Experiment $\mathcal{D}_1$}: This experiment modifies $\mathcal{D}^{\text{real}}$ by simulating all one-out-of-many proofs, range proofs, representation proofs, and modified Chaum-Pedersen proof.
 As all these protocols are special honest-verifier zero knowledge, the simulated proofs are indistinguishable from the real proofs generated in $\mathcal{D}^{\text{real}}$.
 Hence $\func{Adv}^{\mathcal{D}_1} = 0$.
 
