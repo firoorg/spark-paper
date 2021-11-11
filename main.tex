@@ -346,6 +346,8 @@ This algorithm allows a recipient (or designated entity) to compute the value an
 It requires the incoming view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
 If the coin is not destined for a known diversified address, the algorithm returns failure.
 
+It is assumed that the recipient has run the $\func{Verify}$ algorithm on the transaction generating the coin being identified.
+
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, coin $\func{Coin}$, address table $\func{AddrTable}$
 
 \textbf{Outputs:} Value $v$, memo $m$
@@ -367,6 +369,8 @@ If the coin is not destined for a known diversified address, the algorithm retur
 This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for any diversified address it has produced.
 It requires the full view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
 If the coin is not destined for a known diversified address, the algorithm returns failure.
+
+It is assumed that the recipient has run the $\func{Verify}$ algorithm on the transaction generating the coin being recovered.
 
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, full view key $\addr_{\text{full}}$, address table $\func{AddrTable}$, coin $\func{Coin}$.
 
@@ -459,7 +463,8 @@ This algorithm assesses the validity of a transaction.
 If the input transaction is a mint transaction:
 \begin{enumerate}
     \item Parse the transaction $\text{tx}_{\text{mint}} = (\func{Coin}, \Pi_{\text{bal}})$.
-    \item Parse the coin value and value commitment $(v, C)$ from $\func{Coin}$.
+    \item Parse the coin value, serial commitment, and value commitment $(v,S,C)$ from $\func{Coin}$.
+    \item If $S$ appears in an output coin from any previously-verified transaction, output 0.
     \item Check that $v \in [0,v_{\text{max}})$, and output 0 if this fails.
     \item Check that $\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
     \item Output 1.
@@ -473,14 +478,18 @@ If the input transaction is a spend transaction:
     \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
     \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
-    \item Parse the output coin value commitments and range proofs $\{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
+    \item Parse the output coin serial commitments, value commitments, and range proofs $\{ \overline{S}_j, \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
     \item For each $u \in [0,w):$
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
     \end{enumerate}
     \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}((pp_{\text{chaum}},\mu),\Pi_{\text{chaum}},\{S_u',T_u\}_{u=0}^{w-1}),$$ and output 0 if this fails.
-    \item For each $j \in [0,t)$, check that $\func{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
+    \item For each $j \in [0,t)$:
+    \begin{enumerate}
+        \item If $\overline{S}_j$ appears in an output coin in this transaction or in any previously-verified transaction, output 0.
+        \item Check that $\func{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
+    \end{enumerate}
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
     \item Check that $$\func{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
     \item Output 1.
