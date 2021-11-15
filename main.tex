@@ -845,13 +845,43 @@ The oracle $\mathcal{O}^{DAP}$ also provides an $\func{Insert}$ query that allow
 
 For each security property, we say the DAP satisfies the property if the adversary can win the corresponding game with only negligible probability.
 
-\begin{remark}
-We also require the DAP scheme to be complete, which implies that any unspent coin (with unique partial serial number commitment opening $(s,r,-)$ on the ledger can be spent.
-This property means that if the coin appears on the ledger $L$ as an output of a transaction, but its corresponding tag is not revealed in any valid transaction, then a user in possession of the corresponding address spend key can generate a valid spend transaction consuming it.
+We now state a lemma that will be useful when examining the security of our construction.
 
-Note that if the spend key holder cannot produce such a valid transaction, by construction the coin's tag must already appear in a previous valid transaction.
-Such a previous valid transaction must have a modified Chaum-Pedersen proof that extracts, in part, the address's private spend key $r$, a contradiction since the adversary has only a negligible advantage in discrete logarithm extraction.
-\end{remark}
+\begin{lemma}\label{lem:extract}
+    Given a ledger, two otherwise valid transactions reveal the same tag only if there exist coins with serial commitments $S_1,S_2$ produced in previous valid transactions and an extractor that produces representations of the following form:
+    \begin{alignat*}{1}
+        S_1 &= \comm(x,y,\beta_1) \\
+        S_2 &= \comm(x,y,\beta_2)
+    \end{alignat*}
+\end{lemma}
+
+\begin{proof}
+    Let $T$ be the tag common to the two transactions.
+    Each transaction has a valid modified Chaum-Pedersen proof.
+    One transaction's valid proof yields statement values $T,S_1' \in \G$ and witness values $x_1,y_1,z_1 \in \F$ such that $U = x_1 T + y_1 G$ and $S_1' = x_1 F + y_1 G + z_1 H$.
+    Similarly, the other transaction's valid proof yields statement values $T,S_2' \in \G$ and witness values $x_2,y_2,z_2 \in \F$ such that $U = x_2 T + y_2 G$ and $S_2' = x_2 F + y_2 G + z_2 H$.
+    Since $U$ and $G$ are independent and Pedersen commitments are computationally binding, we must have (except with negligible probability) that $x_1 = x_2 = x$ and $y_1 = y_2 = y$.
+    Hence $S_1' = xF + yG + z_1 H$ and $S_2' = xF + yG + z_2 H$.
+
+    Each transaction further has a valid parallel one-of-many proof.
+    From the first transaction's proof we have (by index extraction referencing an element of its input cover set) a group element $S_1 \in \G$ and scalar $\alpha_1 \in F$ such that $S_1 - S_1' = \alpha_1 H$.
+    For the second proof, we similarly have $S_2 \in \G$ and $\alpha_2 \in \F$ such that $S_2 - S_2' = \alpha_2 H$.
+
+    This means in particular that $$S_1 = xF + yG + (z_1 + \alpha_1)H$$ and $$S_2 = xF + yG + (z_2 + \alpha_2)H$$ by combining these results.
+    Since transaction validity requires all input cover set elements to exist as outputs of previous valid transactions, we have extracted representations of the desired form by setting $\beta_1 = z_1 + \alpha_1$ and $\beta_2 = z_2 + \alpha_2$.
+\end{proof}
+Observe that the result also holds for duplicate tags revealed in the same (otherwise valid) transaction, with almost identical reasoning.
+
+\subsection{Completeness}
+
+Completeness requires that no bounded adversary can prevent an honest user from spending a coin.
+Specifically, this means that if the user is able to recover a coin using its full view key, then it can generate a valid spend transaction consuming the coin.
+This definition is intended to ensure that only an honest user can generate a transaction revealing a tag for a coin it controls.
+
+To see why this property holds, note that by construction, if an honest user is unable to produce a spend transaction for a coin with serial commitment $S$ that it has recovered, the corresponding tag $T$ must appear in a previous valid transaction.
+The recovered coin $S$ must be a commitment of the form $S = \comm(s,r,0)$ for serial number $s$ and spend key component $r$ according to the $\func{Recover}$ definition.
+By Lemma \ref{lem:extract}, any previous transaction revealing $T$ must consume a coin with serial commitment $\overline{S} = \comm(s,r,z)$ for $z \neq 0$ (since coins must have unique serial commitments).
+Since the user cannot have recovered $\overline{S}$ because $z$ is nonzero, it did not generate the transaction consuming $\overline{S}$, a contradiction since that transaction implies knowledge of the spend key $r$ by extraction.
 
 \begin{remark}
 It will be useful to assert that if the holder of an incoming view key is able to identify a coin, or if the holder of the corresponding full view key is able to recover a coin, then the coin serial number commitment computationally binds uniquely to a public address produced from $\func{CreateAddress}$ on the incoming view key for some diversifier index.
@@ -925,20 +955,16 @@ By way of contradiction, assume the adversary $\mathcal{A}$ interacts with $\mat
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:distinct}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition 1 is non-negligible.
 Each $\text{tx}_{\text{spend}}$ generated by a non-$\func{Insert}$ oracle query satisfies this condition already, so there must exist a transaction $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ inserted by $\mathcal{A}$.
 
-Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin; that is, reveal the same partial opening $(s,r,-)$ of coin serial number commitments.
+Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin with serial commitment $S$.
 Validity of the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
 Because transaction validity implies $T_{u_1} \neq T_{u_2}$, we must have $(s_{u_1},r_{u_1}) \neq (s_{u_2},r_{u_2})$.
-Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to input set group elements $S_1$ and $S_2$) and discrete logarithm extractions such that $S_1 - S_{u_1}' = x_{u_1} H$ and $S_2 - S_{u_2}' = x_{u_2} H$.
+Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to the same input set group element $S$) and discrete logarithm extractions such that $S - S_{u_1}' = x_{u_1} H$ and $S - S_{u_2}' = x_{u_2} H$.
 This means
-$$S_1 = \comm(s_{u_1},r_{u_1},x_{u_1}+y_{u_1})$$
-and
-$$S_2 = \comm(s_{u_2},r_{u_2},x_{u_2}+y_{u_2})$$
-which contradicts the assumption of unique partial openings for consumed coin serial number commitments.
+$$S = \comm(s_{u_1},r_{u_1},x_{u_1}+y_{u_1}) = \comm(s_{u_2},r_{u_2},x_{u_2}+y_{u_2}),$$
+a contradiction since the commitment scheme is computationally binding.
 
 The second possibility for violation of the condition is that the transaction $\text{tx}_{\text{spend}}$ consumes a coin that is not generated in any previous valid transaction.
-Validity of the modified Chaum-Pedersen proof for such an input gives a tag representation $U = sT + rG$ and serial number commitment offset $S' = sF + rG + yH$.
-Validity of the parallel one-out-of-many proof for the input gives an index $l$ such that $S_l - S' = xH$, meaning $S_l = sF + rG + (x + y)H$ is an opening of this commitment.
-Because transaction validity requires all input ambiguity set elements to be produced in previous valid transactions as valid commitments, the adversary knows an opening of such a commitment, which is a contradiction.
+This follows immediately using similar reasoning as above, since transaction validity asserts knowledge of an opening to a commitment contained in the input set, all of which must have been previously generated in valid transactions by definition.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:multiple}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:multiple} is non-negligible.
 This means the augmented ledger $(L, \vec{a})$ contains two valid spend transactions consuming the same coin but producing distinct tags.
@@ -1009,9 +1035,8 @@ Therefore, in order to produce valid $\text{tx}' \neq \text{tx}$, we consider tw
 In the first case, at least one input to the binding hash $\hash_{\text{bind}}$ used to initialize the modified Chaum-Pedersen transcripts must differ between the proofs.
 Because we model this hash function as a random oracle, the outputs differ except with negligible probability, a contradiction since the resulting proof structures must be identical.
 
-In the second case, suppose that the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}'$ contained in $\text{tx}'$ yields extraction $(s',r',y')$, and that the proof $\Pi_{\text{chaum}}$ contained in $\text{tx}$ yields $(s,r,y)$.
-Since the corresponding tags are identical, we must have $s' = s$ and $r' = r$.
-Any serial number commitment $S$ with a partial opening $(s,r,-)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component corresponding to an address $(Q_0,Q_1,Q_2)$.
+In the second case, because the tag revealed in both $\text{tx'}$ and $\text{tx}$ is identical, Lemma \ref{lem:extract} gives extractions of the form $(s,r,y)$ and $(s,r,0)$ respectively.
+Further, the coin $S = \comm(s,r,0)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component for an address $(Q_0,Q_1,Q_2)$ not controlled by $\mathcal{A}$.
 Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or from any set of corresponding diversified address components $\{Q_{2,i}\}_i$ produced from the same spend key.
 However, each $Q_{2,i}$ is produced linearly against $Q_2$ and querying $\hash_{Q_2}$ with unique $(s_1,i)$ input, a contradiction.
 \end{proof}
