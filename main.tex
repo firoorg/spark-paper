@@ -708,6 +708,7 @@ The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerif
 \left\{ pp_{\text{chaum}}, \{S_i, T_i\}_{i=0}^{l-1} \subset \G^2 ; (\{x_i, y_i, z_i\}_{i=0}^{l-1}) \subset \F^3 : \right. \\
 \left. \forall i \in [0,l), S_i = x_i F + y_i G + z_i H, U = x_i T_i + y_i G \right\}
 \end{multline*}
+Our protocol uses a power-of-challenge technique inspired by a method used for aggregating Schnorr signatures \cite{batchschnorr}.
 The protocol proceeds as follows:
 \begin{enumerate}
     \item The prover selects random $\{r_i,s_i\}_{i=0}^{l-1}, t \in \F$.
