@@ -319,7 +319,7 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 \item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \Pi_{\text{rec}}, \overline{v}, \overline{m})$.
 Otherwise, output the tuple $(S, K, C, \Pi_{\text{rec}}, v, \overline{m})$.
 \end{enumerate}
-The case $b=0$ represents a coin with hidden value being generated in a spend transaction, while the case $b=0$ represents a coin with plaintext value being generated in a mint transaction.
+The case $b=0$ represents a coin with hidden value being generated in a spend transaction, while the case $b=1$ represents a coin with plaintext value being generated in a mint transaction.
 Note that it is possible to securely aggregate range proofs within a transaction; this does not affect protocol security.
 
 
