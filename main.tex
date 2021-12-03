@@ -358,7 +358,7 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
 \item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(s_1 K)$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
+\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
 \end{enumerate}
@@ -382,9 +382,9 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
 \item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(s_1 K)$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
+\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
-\item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
+\item Compute the serial number $$s = \hash_{\text{ser}}(K_{\text{der}}) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output the tuple $(s, T, v, m)$.
 \end{enumerate}
@@ -885,10 +885,12 @@ By Lemma \ref{lem:extract}, any previous transaction revealing $T$ must consume 
 Since the user cannot have recovered $\overline{S}$ because $z$ is nonzero, it did not generate the transaction consuming $\overline{S}$, a contradiction since that transaction implies knowledge of the spend key $r$ by extraction.
 
 \begin{remark}
+\label{rmk:janus}
 It will be useful to assert that if the holder of an incoming view key is able to identify a coin, or if the holder of the corresponding full view key is able to recover a coin, then the coin serial number commitment computationally binds uniquely to a public address produced from $\func{CreateAddress}$ on the incoming view key for some diversifier index.
 
 It is straightforward to show this property holds.
-Successful execution of either the $\func{Identify}$ or $\func{Recover}$ algorithms implies in particular the verification $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ for some diversifier $i$ obtained from the algorithms during a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $$K = k\hash_{Q_0}(s_1,i)F = kQ_{0,i}.$$
+Successful execution of either the $\func{Identify}$ or $\func{Recover}$ algorithms implies in particular the verification $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ for the diversifier index $i$ obtained from a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $$kF = \frac{1}{\hash_{Q_0}(s_1,i)}K,$$ from which it follows that
+$$K = k\hash_{Q_0}(s_1,i)F = kQ_{0,i}.$$
 Hence the serial number commitment can be expressed as follows:
 \begin{align*}
 S &= \comm(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
@@ -896,6 +898,27 @@ S &= \comm(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
 &= \comm(\hash_{\text{ser}}(kQ_{1,i}), 0, 0) + Q_{2,i}
 \end{align*}
 Since diversified address components are produced using queries against independent cryptographic hash functions on the incoming view key $s_1$ and diversifier index $i$, they are unique and the desired binding holds.
+\end{remark}
+
+\begin{remark}
+The construction in Remark \ref{rmk:janus} for asserting that valid coins uniquely and correctly bind to diversified addresses can be simplified and made more efficient.
+To do so, the representation proof $\Pi_{\text{rec}}$ is removed.
+When constructing a coin using $\func{CreateCoin}$, the sender embeds the value $kF$ into the symmetric encryption key:
+$$k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}},kF)$$
+During coin identification using $\func{Identify}$ or recovery using $\func{Recover}$, the recipient computes the key after producing the diversifier index $i$:
+$$k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}},(1/\hash_{Q_0}(s_1,i))K)$$
+Provided that the subsequent verification and decryption using $\func{AEADDecrypt}$ succeed, the inputs to $\func{AEADKeyGen}$ must be identical (except perhaps with negligible probability):
+$$kF = \frac{1}{\hash_{Q_0}(s_1,i)}K$$
+
+However, in order to apply the reasoning of Remark \ref{rmk:janus} for the representation of the recovery key $K$, we must assert the existence of an efficient extractor for the recovery key preimage $k$.
+To do so, we require an additional knowledge-of-exponent assumption introduced in \cite{kea_damgard} and described in more detail in \cite{kea_bellare} (as KEA1).
+Roughly speaking, this assumption states that successful completion of a Diffie-Hellman triple implies knowledge of a suitable exponent via the existence of an efficient extractor for it.
+We refer the reader to \cite{kea_bellare} for the complete formalization, but describe here why our construction meets the requirements for the existence of the extractor.
+
+To enable a sender to generate a coin using $\func{CreateCoin}$, the recipient provides some $Q_{0,i}$ (as part of a complete diversified address) and the global public parameter $F = (1/\hash_{Q_0}(s_1,i))Q_{0,i}$.
+In addition to the recovery key $K$, successful AEAD decryption implies the sender has provided (except with negligible probability) the value $(1/\hash_{Q_0}(s_1,i))K$.
+From this, the KEA1 assumption asserts the existence of an efficient extractor producing $k \in \F$ such that $K = kQ_{0,i}$.
+The reasoning of Remark \ref{rmk:janus} then applies.
 \end{remark}
 
 
