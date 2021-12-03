@@ -772,7 +772,7 @@ Hence each $x_i = x_i'$ (and by the same reasoning, $y_i = y_i'$ and $z_i = z_i'
 To show the protocol is special honest-verifier zero knowledge, we construct a valid simulator producing transcripts identically distributed to those of valid proofs.
 The simulator chooses a random challenge $c \in \F$ and random values $\{t_{1,i}\}_{i=0}^{l-1}, t_2, t_3 \in \F$.
 It also randomly selects $\{A_{2,i}\}_{i=1}^{l-1} \in \G$, and sets $$A_1 = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H - \sum_{i=0}^{l-1} c^{i+1} S_i$$ and $$A_{2,0} = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G - \sum_{i=1}^{l-1} A_{2,i} -  \sum_{i=0}^{l-1} c^{i+1} U.$$
-Such a transcript will be accepted by an honest verifier.
+The forms of $A_1$ and $A_{2,0}$ are defined such that the verification equations hold, and therefore such a transcript will be accepted by an honest verifier.
 Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H,U$ are independent, as are transcript elements produced by the simulator.
 
 This completes the proof.
