@@ -378,13 +378,9 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 
 \begin{enumerate}
 \item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
-\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
-\item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
-\item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
-\item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
-\item Compute the serial number $$s = \hash_{\text{ser}}(K_{\text{der}}) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
+\item Arrange the corresponding incoming view key as $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Obtain the value and memo $(v, m) = \func{Identify}(\addr_{\text{in}},\func{Coin},\func{AddrTable})$ from the coin, and return failure if this operation fails.
+\item Use the resulting diversifier index $i$ and derived recovery key $K_{\text{der}}$ to compute the serial number $$s = \hash_{\text{ser}}(K_{\text{der}}) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output the tuple $(s, T, v, m)$.
 \end{enumerate}
