@@ -125,7 +125,7 @@ Let $pp_{\text{par}} = (\G, \F, n, m, pp_{\text{com}})$ be the public parameters
 
 The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left\{ pp_{\text{par}}, \{S_k,V_k\}_{k=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
 \left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
@@ -781,27 +781,31 @@ This completes the proof.
 
 The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left\{ pp_{\text{par}}, \{S_k,V_k\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
 \left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
+
+Let $\delta(i,j): \mathbb{N}^2 \to \F$ be the Kronecker delta function.
+For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary decomposition of $k$.
 
 The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
 \begin{enumerate}
     \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=0}^{m-1,n-1} \in \F$$ uniformly at random, and uses these values to compute the following:
     \begin{align*}
         A &\equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
-        B &\equiv \com(\{\sigma_{l_{j},i}\}_{j,i=0}^{m-1,n-1}, r_B) \\
-        C &\equiv \com(\lbrace a_{j,i}(1-2\sigma_{l_j,i})\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
+        B &\equiv \com(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
+        C &\equiv \com(\lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
         D &\equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
     \end{align*}
     \item For each $j \in [0,m)$, the prover selects $\rho^S_j, \rho^V_j \in \F$ uniformly at random, and computes the following:
     \begin{align*}
-        G^S_j &\equiv \sum_{i=0}^{N-1}p_{i,j}(S_i - S') + \com(0, \rho^S_j) \\
-        G^V_j &\equiv \sum_{i=0}^{N-1}p_{i,j}(V_i - V') + \com(0, \rho^V_j)
+        G^S_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(S_k - S') + \com(0, \rho^S_j) \\
+        G^V_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(V_k - V') + \com(0, \rho^V_j)
     \end{align*}
+    Here each $p_{k,j}$ is defined such that for all $k \in [0,N)$ we have $$\prod_{j=0}^{m-1} \left( \delta(l_j,k_j)x + a_{j,k_j} \right) = \delta(l,k)x^m + \sum_{j=0}^{m-1} p_{k,j}x^j$$ for indeterminate $x$.
     \item The prover sends $A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1}$ to the verifier.
     \item The verifier selects $x \in \F$ uniformly at random and sends it to the prover.
-    \item For each $j \in [0,m)$ and $i \in [1,n)$, the prover computes $f_{j,i} \equiv \sigma_{l_{j},i}x + a_{j,i}$ and the following values:
+    \item For each $j \in [0,m)$ and $i \in [1,n)$, the prover computes $f_{j,i} \equiv \delta(l_{j},i)x + a_{j,i}$ and the following values:
     \begin{align*}
         z_A &\equiv r_A + xr_B \\
         z_C &\equiv xr_C + r_D \\
@@ -816,8 +820,8 @@ The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
     \end{align*}
     and
     \begin{align*}
-        \sum_{i=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,i_j}\right)(S_i - S') - \sum_{j=0}^{m-1} x^jG^S_j &= \com(0, z_S) \\
-        \sum_{i=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,i_j}\right)(V_i - V') - \sum_{j=0}^{m-1} x^jG^V_j &= \com(0, z_V)
+        \sum_{k=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=0}^{m-1} x^jG^S_j &= \com(0, z_S) \\
+        \sum_{k=0}^{N-1} \left(\sum_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=0}^{m-1} x^jG^V_j &= \com(0, z_V)
     \end{align*}
     are true.
 \end{enumerate}
