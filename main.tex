@@ -725,6 +725,7 @@ The protocol proceeds as follows:
     \item The verifier accepts the proof if and only if $$A_1 + \sum_{i=0}^{l-1} c^{i+1} S_i = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H$$ and $$\sum_{i=0}^{l-1} (A_{2,i} + c^{i+1} U) = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G.$$
 \end{enumerate}
 
+This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $c$ with the output of a cryptographic hash function on transcript inputs.
 We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
 
 \begin{proof}
@@ -821,6 +822,7 @@ The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
     are true.
 \end{enumerate}
 
+This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $x$ with the output of a cryptographic hash function on transcript inputs.
 This protocol is complete, special sound, and special honest-verifier zero knowledge; the proof is essentially the same as in the original construction, with only minor straightforward modifications.
 
 
