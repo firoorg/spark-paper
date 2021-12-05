@@ -790,7 +790,8 @@ For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary
 
 The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
 \begin{enumerate}
-    \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=0}^{m-1,n-1} \in \F$$ uniformly at random, and uses these values to compute the following:
+    \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
+    \item The prover computes the following:
     \begin{align*}
         A &\equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
         B &\equiv \com(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
