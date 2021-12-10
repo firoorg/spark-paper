@@ -852,7 +852,7 @@ For each security property, we say the DAP satisfies the property if the adversa
 We now state a lemma that will be useful when examining the security of our construction.
 
 \begin{lemma}\label{lem:extract}
-    Given a ledger, two otherwise valid transactions reveal the same tag only if there exist coins with serial commitments $S_1,S_2$ produced in previous valid transactions and an extractor that produces representations of the following form:
+    Given a ledger, two otherwise valid spend transactions reveal the same tag only if there exist coins with serial commitments $S_1,S_2$ produced in previous valid transactions and an extractor that produces representations of the following form:
     \begin{alignat*}{1}
         S_1 &= \comm(x,y,\beta_1) \\
         S_2 &= \comm(x,y,\beta_2)
@@ -860,7 +860,7 @@ We now state a lemma that will be useful when examining the security of our cons
 \end{lemma}
 
 \begin{proof}
-    Let $T$ be the tag common to the two transactions.
+    Let $T$ be the tag common to the two spend transactions.
     Each transaction has a valid modified Chaum-Pedersen proof.
     One transaction's valid proof yields statement values $T,S_1' \in \G$ and witness values $x_1,y_1,z_1 \in \F$ such that $U = x_1 T + y_1 G$ and $S_1' = x_1 F + y_1 G + z_1 H$.
     Similarly, the other transaction's valid proof yields statement values $T,S_2' \in \G$ and witness values $x_2,y_2,z_2 \in \F$ such that $U = x_2 T + y_2 G$ and $S_2' = x_2 F + y_2 G + z_2 H$.
