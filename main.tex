@@ -521,7 +521,7 @@ To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the f
     \item On receipt of a tuple $(R_\beta,\mu_\beta,C_\beta,s_{1,\beta},s_{2,\beta})$ from another player $\beta$:
     \begin{enumerate}
         \item Checks that $s_{1,\beta} \neq 0$ and $s_{2,\beta} \neq 0$ and aborts otherwise.
-        \item Verifies the proof of knowledge by checking that $$\mu_\beta G - \hash_{\text{pok}}(\beta,C_{\beta,0},R_\beta) = R_\beta$$ and aborting otherwise.
+        \item Verifies the proof of knowledge by checking that $$\mu_\beta G - \hash_{\text{pok}}(\beta,C_{\beta,0},R_\beta)C_{\beta,0} = R_\beta$$ and aborting otherwise.
     \end{enumerate}
     \item For each $1 \leq \beta \leq \nu$, computes a player share $\widehat{r}_{\alpha,\beta} = f_\alpha(\beta)$ and sends it to player $\beta$.
     \item On receipt of a player share $\widehat{r}_{\beta,\alpha}$ from another player $\beta$, verifies the share by checking that $$\sum_{j=0}^{t-1} \alpha^jC_{\beta,j} = \widehat{r}_{\beta,\alpha}G$$ and aborting otherwise.
