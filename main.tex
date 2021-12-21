@@ -305,7 +305,7 @@ Note that while this algorithm generates a serial number commitment, it cannot c
 
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, destination public address $\addr_{\text{pk}}$, value $v \in [0, v_{\text{max}})$, memo $m$, type bit $b$
 
-\textbf{Outputs:} Coin public key $S$, recovery key $K$, value commitment $C$, value commitment range proof $\Pi_{\text{rp}}$ (if $b=0$), encrypted value $\overline{v}$ (if $b=0$) or value $v$ (if $b=1$), encrypted memo $\overline{m}$
+\textbf{Outputs:} Serial number commitment $S$, recovery key $K$, value commitment $C$, value commitment range proof $\Pi_{\text{rp}}$ (if $b=0$), encrypted value $\overline{v}$ (if $b=0$) or value $v$ (if $b=1$), encrypted memo $\overline{m}$
 
 \begin{enumerate}
 \item Parse the recipient address $\addr_{\text{pk}} = (Q_0, Q_1, Q_2)$.
