@@ -354,7 +354,7 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 
 \begin{enumerate}
 \item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
-\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\func{Coin}$.
+\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, representation proof $\Pi_{\text{rec}}$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\func{Coin}$.
 \item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
 \item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
 \item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
