@@ -1085,7 +1085,7 @@ At each consecutive step of the experiment:
     It receives the two oracle answers $(a_0,a_1)$, but returns $(a_b,a_{1-b})$ to $\mathcal{A}$.
 \end{itemize}
 \end{enumerate}
-As the adversary does not know the bit $b$ and the mapping between $(L_{\text{left}}, L_{\text{right}})$ and $(L_0, L_1)$, it cannot learn weather it affects the behavior of honest parties on $(L_0, L_1)$ or on $(L_1, L_0)$.
+As the adversary does not know the bit $b$ and the mapping between $(L_{\text{left}}, L_{\text{right}})$ and $(L_0, L_1)$, it cannot learn whether it affects the behavior of honest parties on $(L_0, L_1)$ or on $(L_1, L_0)$.
 At the end of the experiment, $\mathcal{A}$ sends $\mathcal{C}$ a bit $b^\prime \in \lbrace 0,1 \rbrace$.
 The challenger outputs $\mathcal{C}$ outputs 1 if $b = b^\prime$, and 0 otherwise.
 
@@ -1102,10 +1102,10 @@ If the query type of $Q$ and $Q^\prime$ is $\func{Spend}$, then:
 \end{itemize}
 
 We say a DAP scheme $\Pi$ is $\func{LIND}$-secure if $\mathcal{A}$ wins the game $\func{LIND}$ only probability at most negligibly better than chance:
-$$\text{Pr}[\func{L-IND}(\Pi, \mathcal{A}, \lambda) = 1] - \frac{1}{2} \leq \text{negl}(\lambda)$$
+$$\text{Pr}[\func{LIND}(\Pi, \mathcal{A}, \lambda) = 1] - \frac{1}{2} \leq \text{negl}(\lambda)$$
 
 \begin{proof}
-In order to prove that $\mathcal{A}$'s advantage in the $\func{LIND}$ experiment is negligible, we first consider a simulation experiment $\mathcal{D}^{\text{sim}}$, in which $\mathcal{A}$ interacts with $\mathcal{C}$ as in the L-IND experiment, but with modifications.
+In order to prove that $\mathcal{A}$'s advantage in the $\func{LIND}$ experiment is negligible, we first consider a simulation experiment $\mathcal{D}^{\text{sim}}$, in which $\mathcal{A}$ interacts with $\mathcal{C}$ as in the $\func{LIND}$ experiment, but with modifications.
 
 \textbf{The simulation experiment $\mathcal{D}^{\text{sim}}$}: Since the parallel one-out-of-many, modified Chaum-Pedersen, representation, and range proving systems are all special honest-verifier zero knowledge, we can take advantage of the simulator for each.
 Given input statements and verifier challenges, each proving system's simulator produces transcripts indistinguishable from honest proofs.
