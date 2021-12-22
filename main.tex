@@ -362,6 +362,13 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
 \end{enumerate}
+To see why the $\func{RepVerify}$ operation succeeds on an honestly-generated coin, observe that
+\begin{alignat*}{1}
+    \frac{1}{\hash_{Q_0}(s_1,i)}K &= \frac{1}{\hash_{Q_0}(s_1,i)}kQ_0 \\
+    &= \frac{1}{\hash_{Q_0}(s,1,i)}k \left(\hash_{Q_0}(s_1,i)F\right) \\
+    &= kF
+\end{alignat*}
+and hence both the sender and recipient use the same input statement to the representation proving system.
 
 
 \subsection{\texorpdfstring{$\func{Recover}$}{Recover}}
@@ -440,12 +447,9 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
 \end{enumerate}
-
-\begin{remark}
-We note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
+Note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
 This observation can allow for the transfer of value into new coins without the use of a mint transaction, or a transfer of value to a transparent base layer.
 Such transfer functionality is likely to introduce practical risk that is not captured by the protocol security model, and warrants thorough analysis.
-\end{remark}
 
 
 \subsection{\texorpdfstring{$\func{Verify}$}{Verify}}
