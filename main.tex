@@ -788,7 +788,7 @@ The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVe
 Let $\delta(i,j): \mathbb{N}^2 \to \F$ be the Kronecker delta function.
 For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary decomposition of $k$.
 
-The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
+The protocol proceeds as follows, where we use some of the notation of \cite{lelantus,triptych}:
 \begin{enumerate}
     \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
     \item The prover computes the following:
@@ -828,8 +828,27 @@ The protocol proceeds as follows, where we use the notation of \cite{lelantus}:
 \end{enumerate}
 
 This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $x$ with the output of a cryptographic hash function on transcript inputs.
-This protocol is complete, special sound, and special honest-verifier zero knowledge; the proof is essentially the same as in the original construction, with only minor straightforward modifications.
+Proofs of completeness and special soundness are nearly identical to those of \cite{lelantus,triptych}, with only trivial and straightforward modifications.
+For clarity, we prove that the protocol is special honest-verifier zero knowledge.
 
+\begin{proof}
+    To show that the protocol is special honest-verifier zero knowledge, we construct a simulator that, when provided a random verifier challenge $x$, produces a proof transcript identically distributed to that of a real proof.
+
+    As in \cite{triptych}, we note that the simulator presented in \cite{bootle} applies directly to our context.
+    To produce our simulated transcript on random $x$, the simulator samples $B,\{G^S_j,G^V_j\}_{j=1}^{m-1} \in \G$ and $z_S,z_V \in \F$ uniformly at random.
+    It runs the simulator presented in \cite{bootle} to obtain $A,C,D \in \G$ and $z_A,z_C,\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$ and computes $\{f_{j,0}\}_{j=0}^{m-1}$ uniquely according to the protocol:
+    $$f_{j,0} = x - \sum_{i=1}^{n-1} f_{j,i}$$
+    It uses the final two verification equations to compute $G^S_0$ and $G^V_0$:
+    \begin{alignat*}{1}
+        G^S_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=1}^{m-1} x^jG^S_j - \com(0, z_S) \\
+        G^V_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=1}^{m-1} x^jG^V_j - \com(0, z_V)
+    \end{alignat*}
+
+    The transcript elements produced by the simulator in \cite{bootle} are identically distributed to those in real proofs by construction.
+    Since $\{\rho^S_j,\rho^V_j\}_{j=0}^{m-1}$ is sampled uniformly at random in a real proof and the decisional Diffie-Hellman problem is hard in $\G$, the set $\{G^S_j,G^V_j\}_{j=0}^{m-1}$ is independent and uniformly distributed in the simulation and in real proofs.
+    Finally, $z_S$ and $z_V$ are independent and uniformly distributed in both the simulation and in real proofs since $x$ was sampled randomly.
+    Hence the protocol is special honest-verifier zero knowledge.
+\end{proof}
 
 \section{Payment System Security}
 \label{app:security}
