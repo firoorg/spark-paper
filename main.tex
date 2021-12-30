@@ -3,15 +3,17 @@
 \pagestyle{plain}
 
 \usepackage{amsmath,amssymb,amsfonts}
+\usepackage{mathtools}
 \usepackage{bookmark}
 \setcounter{tocdepth}{3}
 
 \newcommand{\G}{\mathbb{G}}
 \newcommand{\F}{\mathbb{F}}
 \newcommand{\hash}{\mathcal{H}}
-\newcommand{\addr}{\operatorname{addr}}
-\newcommand{\com}{\operatorname{Com}}
-\newcommand{\dcom}{\operatorname{DCom}}
+\newcommand{\func}[1]{\mathsf{#1}}
+\newcommand{\addr}{\func{addr}}
+\newcommand{\com}{\func{Com}}
+\newcommand{\comm}{\func{Comm}}
 
 
 \begin{document}
@@ -47,22 +49,23 @@ To mitigate Mimblewimble's linkability issue, Beam has designed and implemented 
 The Lelantus protocol currently used in Firo does not provide recipient privacy; it supports only mints and signer-ambiguous spends of arbitrary amounts that interact with transparent Bitcoin-style outputs, which can leak information about recipient identity \cite{lelantus}.
 Seraphis \cite{seraphis} is a transaction protocol framework of similar design being developed concurrently.
 
-Here we introduce Spark, an iteration on the Lelantus protocol enabling trustless private transactions which supports sender, receiver and transaction amount privacy.
+Here we introduce Spark, an iteration on the Lelantus protocol enabling trustless private transactions which supports sender, recipient, and transaction amount privacy.
 Transactions in Spark, like those in Lelantus and Monero, use specified sender anonymity sets composed of previously-generated shielded outputs.
 A parallel proving system adapted from a construction by Groth and Bootle \textit{et al.} \cite{groth,bootle} (of independent interest and used in other modified forms in Lelantus\cite{lelantus} and Triptych \cite{triptych}) proves that a consumed output exists in the anonymity set; amounts are encrypted and hidden algebraically in Pedersen commitments, and a tag derived from a verifiable random function \cite{dodis,omniring} prevents consuming the same output multiple times, which in the context of a transaction protocol would constitute a double-spend attempt.
 
 Spark transactions support efficient verification in batches, where range and spend proofs can take advantage of common proof elements and parameters to lower the marginal cost of verifying each proof in such a batch; when coupled with suitably-chosen sender anonymity sets, the verification time savings of batch verification can be significant.
 
 Spark enables additional useful functionality.
-The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
-The protocol further adds two levels of opt-in visibility into transactions without delegating spend authority.
+The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost,schnorrwithschnorr} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
+The protocol further adds three levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
+Payment proofs allow a sender to assert the destination, value, and memo of a coin while proving (in zero knowledge) that it knows the secret data used to produce the coin; this permits more fine-grained disclosure without revealing view keys.
 
 All constructions used in Spark require only public parameter generation, ensuring that no trusted parties are required to bootstrap the protocol or ensure soundness.
 
 
-\section {Cryptographic Preliminaries}
+\section{Cryptographic Preliminaries}
 
 Throughout this paper, we use additive notation for group operations.
 Let $\mathbb{N}$ be the set $\{0,1,2,\ldots\}$ of non-negative integers.
@@ -77,8 +80,8 @@ The commitment scheme contains an algorithm $\com: \F^2 \to \G$, where $\com(v,r
 Further, the construction is perfectly hiding and computationally binding.
 
 This definition extends naturally to a double-masked commitment scheme.
-Let $pp_{\text{dcom}} = (\G, \F, F, G, H)$ be the public parameters for a double-masked Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H \in \G$ are uniformly-sampled independent generators.
-The commitment scheme contains an algorithm $\dcom: \F^3 \to \G$, where $\dcom(v,r,s) = vF + rG + sH$ that is homomorphic in the sense that $$\dcom(v_1,r_1,s_1) + \dcom(v_2,r_2,s_2) = \dcom(v_1 + v_2,r_1 + r_2,s_1 + s_2)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2,s_1,s_2 \in \F$.
+Let $pp_{\text{comm}} = (\G, \F, F, G, H)$ be the public parameters for a double-masked Pedersen commitment scheme, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H \in \G$ are uniformly-sampled independent generators.
+The commitment scheme contains an algorithm $\comm: \F^3 \to \G$, where $\comm(v,r,s) = vF + rG + sH$ that is homomorphic in the sense that $$\comm(v_1,r_1,s_1) + \comm(v_2,r_2,s_2) = \comm(v_1 + v_2,r_1 + r_2,s_1 + s_2)$$ for all such input values $v_1,v_2 \in \F$ and masks $r_1,r_2,s_1,s_2 \in \F$.
 Further, the construction is perfectly hiding and computationally binding.
 
 
@@ -87,8 +90,10 @@ Further, the construction is perfectly hiding and computationally binding.
 A representation proof is used to demonstrate knowledge of a discrete logarithm in zero knowledge.
 Let $pp_{\text{rep}} = (\G, \F)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problems is hard and $\F$ is its scalar field.
 
-The proving system itself is a tuple of algorithms $(\text{RepProve},\text{RepVerify})$ for the following relation:
+The proving system itself is a tuple of algorithms $(\func{RepProve},\func{RepVerify})$ for the following relation:
 $$\left\{ pp_{\text{rep}}, G, X \in \G ; x \in \F : X = xG \right\}$$
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound; these definitions are standard \cite{groth}.
 
 The well-known Schnorr proving system may be used for this purpose.
 
@@ -96,11 +101,16 @@ The well-known Schnorr proving system may be used for this purpose.
 \subsection{Modified Chaum-Pedersen Proving System}
 
 A Chaum-Pedersen proof is used to demonstrate discrete logarithm equality in zero knowledge.
-Here we require a modification to the standard proving system that uses additional group generators.
+Here we require a modification to the standard proving system that uses additional group generators and supports multiple assertions within a single proof.
 Let $pp_{\text{chaum}} = (\G, \F, F, G, H, U)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, and $F,G,H,U \in \G$ are uniformly-sampled independent generators.
 
-The proving system is a tuple of algorithms $(\text{ChaumProve},\text{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
+The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerify})$ for the following relation:
+\begin{multline*}
+\left\{ pp_{\text{chaum}}, \{S_i, T_i\}_{i=0}^{l-1} \subset \G^2 ; (\{x_i, y_i, z_i\}_{i=0}^{l-1}) \subset \F^3 : \right. \\
+\left. \forall i \in [0,l), S_i = x_i F + y_i G + z_i H, U = x_i T_i + y_i G \right\}
+\end{multline*}
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
 We present an instantiation of such a proving system in Appendix \ref{app:chaum}, along with security proofs.
 
@@ -113,11 +123,13 @@ We show how to produce such a proving system as a straightforward modification o
 
 Let $pp_{\text{par}} = (\G, \F, n, m, pp_{\text{com}})$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, $n > 1$ and $m > 1$ are integer-valued size decomposition parameters, and $pp_{\text{com}}$ are the public parameters for a Pedersen commitment (and matrix commitment) construction.
 
-The proving system itself is a tuple of algorithms $(\text{ParProve},\text{ParVerify})$ for the following relation, where we let $N = n^m$:
+The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2 ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l = \com(0,s), V_l = \com(0,v) \right\}
+\left\{ pp_{\text{par}}, \{S_k,V_k\}_{k=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
 We present an instantiation of such a proving system in Appendix \ref{app:parallel}.
 
@@ -128,13 +140,13 @@ We require the use of an authenticated symmetric encryption with associated data
 In the context of the Spark protocol, this construction is used to encrypt value and arbitrary memo data for use by the sender and recipient of a transaction.
 
 Let $pp_{\text{sym}}$ be the public parameters for such a construction.
-The construction itself is a tuple of algorithms $(\text{AEADKeyGen},\text{AEADEncrypt},\text{AEADDecrypt})$.
-Here $\text{AEADKeyGen}$ is a key derivation function that accepts as input an arbitrary string, and produces a key in the appropriate key space.
-The algorithm $\text{AEADEncrypt}$ accepts as input a key, associated data, and arbitrary message string, and produces ciphertext in the appropriate space.
-The algorithm $\text{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
+The construction itself is a tuple of algorithms $(\func{AEADKeyGen},\func{AEADEncrypt},\func{AEADDecrypt})$.
+Here $\func{AEADKeyGen}$ is a key derivation function that accepts as input an arbitrary string, and produces a key in the appropriate key space.
+The algorithm $\func{AEADEncrypt}$ accepts as input a key, associated data, and arbitrary message string, and produces ciphertext in the appropriate space.
+The algorithm $\func{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
 For the purposes of this protocol, we may assume the use of a fixed nonce, as keys are used uniquely with given associated data.
 
-Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context.
+Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context \cite{keyprivacy}.
 
 
 \subsection{Range Proving System}
@@ -144,8 +156,10 @@ A range proving system demonstrates that a commitment binds to a value within a 
 In the context of the Spark protocol, it avoids overflow that would otherwise fool the balance definition by effectively binding to invalid negative values.
 Let $pp_{\text{rp}} = (\G, \F, v_{\text{max}}, pp_{\text{com}})$ be the relevant public parameters for such a construction, where $pp_{\text{com}}$ are the public parameters for a Pedersen commitment construction.
 
-The proving system itself is a tuple of algorithms $(\text{RangeProve},\text{RangeVerify})$ for the following relation:
+The proving system itself is a tuple of algorithms $(\func{RangeProve},\func{RangeVerify})$ for the following relation:
 $$\left\{ pp_{\text{rp}}, C \in \G ; (v, r) \in \F : 0 \leq v \leq v_{\text{max}}, C = \com(v,r) \right\}$$
+
+We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
 
 In practice, an efficient instantiation like Bulletproofs \cite{bp} or Bulletproofs+ \cite{bp_plus} may be used to satisfy this requirement.
 
@@ -154,9 +168,11 @@ In practice, an efficient instantiation like Bulletproofs \cite{bp} or Bulletpro
 
 We now define the main concepts and algorithms used in the Spark transaction protocol.
 
-\textbf{Addresses}. Users generate addresses that enable transactions.
-An address consists of a tuple $$(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}}).$$
-For each address, $\addr_{\text{pk}}$ is the public address used for receiving funds, $\addr_{\text{in}}$ is an incoming view key used to identify received funds, $\addr_{\text{full}}$ is a full view key used to identify outgoing funds and conduct computationally-heavy proving operations, and $\addr_{\text{sk}}$ is the spend key used to generate transactions.
+\textbf{Keys and addresses}. Users generate keys and addresses that enable transactions.
+A set of keys consists of a tuple $$(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}}).$$
+In this notation, $\addr_{\text{base}}$ is a base key used to derive public addresses for receiving funds, $\addr_{\text{in}}$ is an incoming view key used to identify received funds, $\addr_{\text{full}}$ is a full view key used to identify outgoing funds and conduct computationally-heavy proving operations, and $\addr_{\text{sk}}$ is the spend key used to generate transactions.
+Spark addresses are constructed in such a way that a single set of keys can be used to construct any number of \textit{diversified} public addresses that appear indistinguishable from each other or from public addresses produced from a different set of keys.
+Diversified addressing allows a recipient to provide distinct public addresses to different senders, but scan transactions on chain only once for identification and recovery of incoming coins destined for any of its diversified public addresses.
 
 \textbf{Coins.} A coin encodes the abstract value which is transferred through the private transactions. Each coin is associated with:
 \begin{itemize}
@@ -168,41 +184,41 @@ For each address, $\addr_{\text{pk}}$ is the public address used for receiving f
 \item A range proof for the value commitment, or a proof that a plaintext value is represented by the value commitment.
 \item A memo with arbitrary recipient data.
 \item An encrypted memo intended for decryption by the recipient.
-\item A recovery key used by the recipient to identify the coin and decrypt private data.
+\item A recovery key used by the recipient to identify the coin and decrypt private data, and a related proof of representation (for use by the recipient).
 \end{itemize}
-Coins additionally bind recipient addresses in an indistinguishable way; this may be useful for out-of-band payment proofs that require such binding.
 
 \textbf{Private Transactions}. There are two types of private transactions in Spark:
 \begin{itemize}
-    \item $Mint$ transactions.
-    A $Mint$ transaction generates new coins of public value destined for a recipient public address in a confidential way, either through a consensus-enforced mining process, or by consuming transparent outputs from a non-Spark base layer.
+    \item Mint transactions.
+    A mint transaction generates new coins of public value destined for a recipient public address in a confidential way, either through a consensus-enforced mining process, or by consuming transparent outputs from a non-Spark base layer.
     In this transaction type, a representation proof is included to show that the minted coin is of the expected value.
-    A $Mint$ transaction creates transaction data $\text{tx}_{\text{mint}}$ for recording on a ledger.
-    \item $Spend$ transactions.
-    A $Spend$ transaction consumes existing coins and generates new coins destined for one or more recipient public addresses in a confidential way.
+    A mint transaction creates transaction data $\text{tx}_{\text{mint}}$ for recording on a ledger.
+    \item Spend transactions.
+    A spend transaction consumes existing coins and generates new coins destined for one or more recipient public addresses in a confidential way.
     In this transaction type, a representation proof is included to show that the hidden input and output values are equal.
-    A $Spend$ transaction creates transaction data $\text{tx}_{\text{spend}}$ for recording on a ledger.
+    A spend transaction creates transaction data $\text{tx}_{\text{spend}}$ for recording on a ledger.
 \end{itemize}
 
 \textbf{Tags.} Tags are used to prevent coins from being consumed in multiple transactions.
-When generating a $Spend$ transaction, the sender produces the tag for each consumed coin and includes it on the ledger.
+When generating a spend transaction, the sender produces the tag for each consumed coin and includes it on the ledger.
 When verifying transactions are valid, it suffices to ensure that tags do not appear on the ledger in any previous transactions.
 Tags are bound to validly-recoverable coins uniquely via the serial number commitment secret data, but cannot be associated to specific coins without the corresponding full view key.
 
 \textbf{Algorithms}. Spark is a decentralized anonymous payment (DAP) system defined as the following polynomial-time algorithms:
 \begin{itemize}
-\item \textbf{Setup}: This algorithm outputs all public parameters used by the protocol and its underlying components.
+\item $\func{Setup}$: This algorithm outputs all public parameters used by the protocol and its underlying components.
 The setup process does not require any trusted parameter generation.
-\item \textbf{CreateAddress}: This algorithm outputs a public address, incoming view key, full view key, and spend key.
-\item \textbf{CreateCoin}: This algorithm takes as input a public address, coin value, and memo, and outputs a coin destined for the public address.
-\item \textbf{Mint:} This algorithm takes as input a public address, value, and (optionally) implementation-specific data relating to base-layer outputs, and outputs a mint transaction $\text{tx}_{\text{mint}}$.
-\item \textbf{Identify:} This algorithm takes as input a coin and an incoming view key, and outputs the coin value and memo.
-\item \textbf{Recover:} This algorithm takes as input a coin and a full view key, and outputs the coin value, memo, serial number, and tag.
-\item \textbf{Spend:} This algorithm takes as input a full view key, a spend key, a set of input coins (including coins used as a larger ambiguity set), the indexes of coins to be spent, the corresponding serial numbers and values, a fee value, and a set of output coins to be generated, and outputs a spend transaction $\text{tx}_{\text{spend}}$.
-\item \textbf{Verify:} This algorithm accepts either a mint transaction or a spend transaction, and outputs a bit to assess validity.
+\item $\func{CreateKeys}$: This algorithm outputs a base key, incoming view key, full view key, and spend key.
+\item $\func{CreateAddress}$: This algorithm takes as input an incoming view key and diversifier index, and outputs a public address.
+\item $\func{CreateCoin}$: This algorithm takes as input a public address, coin value, and memo, and outputs a coin destined for the public address.
+\item $\func{Mint}$: This algorithm takes as input a public address, value, and (optionally) implementation-specific data relating to base-layer funds, and outputs a mint transaction $\text{tx}_{\text{mint}}$.
+\item $\func{Identify}$: This algorithm takes as input an incoming view key and coin, and outputs the coin value and memo if the coin is controlled by the key.
+\item $\func{Recover}$: This algorithm takes as input a full view key and coin, and outputs the coin value, memo, serial number, and tag if the coin is controlled by the key.
+\item $\func{Spend}$: This algorithm takes as input a full view key, a spend key, a set of input coins (including coins used as a larger ambiguity set), the indexes of coins to be spent, the corresponding serial numbers and values, a fee value, and a set of output coins to be generated, and outputs a spend transaction $\text{tx}_{\text{spend}}$.
+\item $\func{Verify}$: This algorithm accepts either a mint transaction or a spend transaction, and outputs a bit to assess validity.
 \end{itemize}
 
-We provide detailed descriptions below, and show security of the resulting protocol in the appendixes.
+We provide detailed descriptions below, and show security of the resulting protocol in Appendix \ref{app:security}.
 
 
 \section{Algorithm Constructions}
@@ -210,7 +226,7 @@ We provide detailed descriptions below, and show security of the resulting proto
 In this section we provide detailed description of the DAP scheme algorithms.
 
 
-\subsection{Setup}
+\subsection{\texorpdfstring{$\func{Setup}$}{Setup}}
 
 In our setup the public parameters $pp$ are comprised of the corresponding public parameters of a Pedersen commitment (and matrix commitment) scheme, representation proving system, modified Chaum-Pedersen proving system, parallel one-out-of-many proving system, symmetric encryption scheme, and range proving system.
 
@@ -223,10 +239,10 @@ In our setup the public parameters $pp$ are comprised of the corresponding publi
 Let $\F$ be the scalar field of $\G$.
 \item Sample $F,G,H,U \in \G$ uniformly at random.
 In practice, these generators may be chosen using a suitable cryptographic hash function on public input.
-\item Sample cryptographic hash functions $$\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
+\item Sample cryptographic hash functions $$\hash_{Q_0},\hash_{Q_2},\hash_{\text{ser}},\hash_{\text{val}},\hash_{\text{ser}'},\hash_{\text{val}'},\hash_{\text{bind}}: \{0,1\}^* \to \F$$ uniformly at random.
 In practice, these hash functions may be chosen using domain separation of a single suitable cryptographic hash function.
 \item Compute the public parameters $pp_{\text{com}} = (\G,\F,G,H)$ of a Pedersen commitment scheme.
-\item Compute the public parameters $pp_{\text{dcom}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
+\item Compute the public parameters $pp_{\text{comm}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
 \item Compute the public parameters $pp_{\text{rep}} = (\G,\F)$ of a representation proving system.
 \item Compute the public parameters $pp_{\text{chaum}} = (\G,\F,F,G,H,U)$ of the modified Chaum-Pedersen proving system.
 \item Compute the public parameters $pp_{\text{par}} = (\G,\F,n,m,pp_{\text{com}})$ of the parallel one-out-of-many proving system.
@@ -236,50 +252,78 @@ In practice, these hash functions may be chosen using domain separation of a sin
 \end{enumerate}
 
 
-\subsection{CreateAddress}
+\subsection{\texorpdfstring{$\func{CreateKeys}$}{CreateKeys}}
 
-We describe the construction of all addresses and underlying key types used in the protocol.
+We describe the construction of key types used in the protocol.
 
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$
 
-\textbf{Outputs:} Address key tuple $(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
+\textbf{Outputs:} Key tuple $(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$
 
 \begin{enumerate}
-\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \dcom(0, r, 0)$.
-\item Compute $Q_1 = \dcom(s_1, 0, 0)$ and $Q_2 = \dcom(s_2, r, 0)$.
-\item Set $\addr_{\text{pk}} = (Q_1, Q_2)$.
-\item Set $\addr_{\text{in}} = s_1$.
-\item Set $\addr_{\text{full}} = (s_1, s_2, D)$.
+\item Sample $s_1, s_2, r \in \F$ uniformly at random, and let $D = \comm(0, r, 0)$.
+\item Compute $P_1 = \comm(s_1, 0, 0)$ and $P_2 = \comm(s_2, r, 0)$.
+\item Set $\addr_{\text{base}} = (P_1, P_2)$.
+\item Set $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Set $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
 \item Set $\addr_{\text{sk}} = (s_1, s_2, r)$.
-\item Output the tuple $(\addr_{\text{pk}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{sk})$.
+\item Initialize an empty hash table $\func{AddrTable}$.
+\item Output the tuple $(\addr_{\text{base}}, \addr_{\text{in}}, \addr_{\text{full}}, \addr_{\text{sk}})$.
 \end{enumerate}
+Note that the base key $\addr_{\text{base}}$ is an internal data structure, and is not provided to senders or otherwise exposed to the user.
+Rather, it is used for producing diversified addresses, which are described below.
 
 
-\subsection{CreateCoin}
+\subsection{\texorpdfstring{$\func{CreateAddress}$}{CreateAddress}}
+
+This algorithm generates a \textit{diversified} public address from an incoming view key.
+A given public address is privately and deterministically tied to an index called the \textit{diversifier}.
+Diversified public addresses share the same set of keys for efficiency purposes, but are not linkable without external information.
+
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, diversifier $i \in \mathbb{N}$
+
+\textbf{Outputs:} Diversified address $\addr_{\text{pk}}$
+
+\begin{enumerate}
+\item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Compute the diversified address components:
+\begin{align*}
+Q_{0,i} &= \comm(\hash_{Q_0}(s_1,i),0,0) \\
+Q_{1,i} &= s_1 Q_{0,i} \\
+Q_{2,i} &= \comm(\hash_{Q_2}(s_1,i),0,0) + P_2
+\end{align*}
+\item Add a mapping entry $Q_{2,i} \mapsto i$ in $\func{AddrTable}$ if it does not already exist.
+\item Set $\addr_{\text{pk}} = (Q_{0,i},Q_{1,i},Q_{2,i})$ and output this tuple.
+\end{enumerate}
+Note that we drop the diversifier index $i$ from subsequent notation when referring to addresses in operations performed by entities other than the address holder, since such users are not provided this index and cannot compute it.
+
+
+\subsection{\texorpdfstring{$\func{CreateCoin}$}{CreateCoin}}
 
 This algorithm generates a new coin destined for a given public address.
 Note that while this algorithm generates a serial number commitment, it cannot compute the underlying serial number.
 
 \textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, destination public address $\addr_{\text{pk}}$, value $v \in [0, v_{\text{max}})$, memo $m$, type bit $b$
 
-\textbf{Outputs:} Coin public key $S$, recovery key $K$, value commitment $C$, value commitment range proof $\Pi_{\text{rp}}$ (if $b=0$), encrypted value $\overline{v}$ (if $b=0$) or value $v$ (if $b=1$), encrypted memo $\overline{m}$
+\textbf{Outputs:} Serial number commitment $S$, recovery key $K$, value commitment $C$, value commitment range proof $\Pi_{\text{rp}}$ (if $b=0$), encrypted value $\overline{v}$ (if $b=0$) or value $v$ (if $b=1$), encrypted memo $\overline{m}$
 
 \begin{enumerate}
-\item Parse the recipient address $\addr_{\text{pk}} = (Q_1, Q_2)$.
+\item Parse the recipient address $\addr_{\text{pk}} = (Q_0, Q_1, Q_2)$.
 \item Sample $k \in \F$.
-\item Compute the recovery key $K = \dcom(k, 0, 0)$.
-\item Compute the serial number commitment $$S = \dcom(\hash_{\text{ser}}(kQ_1,Q_1,Q_2), 0, 0) + Q_2.$$
-\item Generate the value commitment $C = \com(v, \hash_{\text{val}}(kQ_1))$.
-\item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \text{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(kQ_1))).$$
-\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(kQ_1)$; encrypt the value $\overline{v} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$ (if $b=0$) and memo $\overline{m} = \text{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m)$.
-\item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \overline{v}, \overline{m})$.
-Otherwise, output the tuple $(S, K, C, v, \overline{m})$.
+\item Compute the recovery key $K = kQ_0$ and derived recovery key $K_{\text{der}} = kQ_1$.
+\item Generate a representation proof: $$\Pi_{\text{rec}} = \func{RepProve}(pp_{\text{rep}},F,kF ; k)$$
+\item Compute the serial number commitment $$S = \comm(\hash_{\text{ser}}(K_{\text{der}}), 0, 0) + Q_2.$$
+\item Generate the value commitment $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$.
+\item If $b=0$, generate a range proof $$\Pi_{\text{rp}} = \func{RangeProve}(pp_{\text{rp}},C;(v,\hash_{\text{val}}(K_{\text{der}}))).$$
+\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; encrypt the value $$\overline{v} = \func{AEADEncrypt}(k_{\text{aead}},\texttt{val},v)$$ (if $b=0$) and memo $$\overline{m} = \func{AEADEncrypt}(k_{\text{aead}},\texttt{memo},m).$$
+\item If $b=0$, output the tuple $(S, K, C, \Pi_{\text{rp}}, \Pi_{\text{rec}}, \overline{v}, \overline{m})$.
+Otherwise, output the tuple $(S, K, C, \Pi_{\text{rec}}, v, \overline{m})$.
 \end{enumerate}
-The case $b=0$ represents a coin with hidden value being generated in a $\text{Spend}$ transaction, while the case $b=0$ represents a coin with plaintext value being generated in a $\text{Mint}$ transaction.
+The case $b=0$ represents a coin with hidden value being generated in a spend transaction, while the case $b=1$ represents a coin with plaintext value being generated in a mint transaction.
 Note that it is possible to securely aggregate range proofs within a transaction; this does not affect protocol security.
 
 
-\subsection{Mint}
+\subsection{\texorpdfstring{$\func{Mint}$}{Mint}}
 
 This algorithm generates new coins from either a consensus-determined mining process, or by consuming non-Spark outputs from a base layer with public value.
 Note that while such implementation-specific auxiliary data may be necessary for generating such a transaction and included, we do not specifically list this here.
@@ -290,69 +334,80 @@ Notably, the coin value used in this algorithm is assumed to be the sum of all p
 \textbf{Outputs}: Mint transaction $\text{tx}_{\text{mint}}$
 
 \begin{enumerate}
-\item Generate the new coin $\text{CreateCoin}(\addr_{\text{pk}}, v, m, 1) \to \text{Coin} = (S, K, C, v, \overline{m})$.
-\item Generate a value representation proof on the value commitment: $$\Pi_{\text{bal}} = \text{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(kQ_1))$$
-\item Output the tuple $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
+\item Generate the new coin $\func{CreateCoin}(\addr_{\text{pk}}, v, m, 1) \mapsto \func{Coin} = (S, K, C, v, \overline{m})$.
+\item Generate a value representation proof on the value commitment, using the derived recovery key $K_{\text{der}}$ computed internally during coin creation: $$\Pi_{\text{bal}} = \func{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(K_{\text{der}}))$$
+\item Output the tuple $\text{tx}_{\text{mint}} = (\func{Coin}, \Pi_{\text{bal}})$.
 \end{enumerate}
 
 
-\subsection{Identify}
+\subsection{\texorpdfstring{$\func{Identify}$}{Identify}}
 
-This algorithm allows a recipient (or designated entity) to compute the value and memo from a coin destined for its public address.
-It requires the incoming view key corresponding to the public address to do so.
-If the coin is not destined for the public address, the algorithm returns failure.
+This algorithm allows a recipient (or designated entity) to compute the value and memo from a coin destined for any diversified address it has produced.
+It requires the incoming view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
+If the coin is not destined for a known diversified address, the algorithm returns failure.
 
-\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, public address $\addr_{\text{pk}}$, coin $\text{Coin}$.
+It is assumed that the recipient has run the $\func{Verify}$ algorithm on the transaction generating the coin being identified.
+
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, incoming view key $\addr_{\text{in}}$, coin $\func{Coin}$, address table $\func{AddrTable}$
 
 \textbf{Outputs:} Value $v$, memo $m$
 
 \begin{enumerate}
-\item Parse the incoming view key $\addr_{\text{in}} = s_1$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
-\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=0$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
+\item Parse the incoming view key $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, representation proof $\Pi_{\text{rec}}$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\func{Coin}$.
+\item Compute the derived recovery key $K_{\text{der}} = s_1 K$.
+\item Query $\func{AddrTable}$ on the value $S - \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0)$ to obtain the diversifier index $i$; if this query fails, return failure.
+\item Check that $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ using the diversifier $i$, and return failure otherwise.
+\item Generate a symmetric encryption key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$; decrypt the value $$v = \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$$ (if $b=0$) and memo $$m = \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m}).$$
 \item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
 \item Output the tuple $(v, m)$.
 \end{enumerate}
+To see why the $\func{RepVerify}$ operation succeeds on an honestly-generated coin, observe that
+\begin{alignat*}{1}
+    \frac{1}{\hash_{Q_0}(s_1,i)}K &= \frac{1}{\hash_{Q_0}(s_1,i)}kQ_0 \\
+    &= \frac{1}{\hash_{Q_0}(s,1,i)}k \left(\hash_{Q_0}(s_1,i)F\right) \\
+    &= kF
+\end{alignat*}
+and hence both the sender and recipient use the same input statement to the representation proving system.
 
 
-\subsection{Recover}
+\subsection{\texorpdfstring{$\func{Recover}$}{Recover}}
 
-This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for its public address.
-It requires the full view key corresponding to the public address to do so.
-If the coin is not destined for the public address, the algorithm returns failure.
+This algorithm allows a recipient (or designated entity) to compute the serial number, tag, value, and memo from a coin destined for any diversified address it has produced.
+It requires the full view key corresponding to the base public address to do so, as well as the hash table $\func{AddrTable}$ generated when originally producing addresses.
+If the coin is not destined for a known diversified address, the algorithm returns failure.
 
-\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, full view key $\addr_{\text{full}}$, public address $\addr_{\text{pk}}$, coin $\text{Coin}$.
+It is assumed that the recipient has run the $\func{Verify}$ algorithm on the transaction generating the coin being recovered.
+
+\textbf{Inputs:} Security parameter $\lambda$, public parameters $pp$, full view key $\addr_{\text{full}}$, address table $\func{AddrTable}$, coin $\func{Coin}$.
 
 \textbf{Outputs:} Coin serial number $s$, tag $T$, value $v$, memo $m$
 
 \begin{enumerate}
-\item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D)$ and public address $\addr_{\text{pk}} = (Q_1, Q_2)$.
-\item Parse the serial number commitment $S$, value commitment $C$, recovery key $K$, encrypted value $\overline{v}$ (if the coin is of type $b=0$) or value $v$ (if the coin is of type $b=1$), and encrypted memo $\overline{m}$ from $\text{Coin}$.
-\item If $\dcom(\hash_{\text{ser}}(s_1 K,Q_1,Q_2), 0, 0) + Q_2 \neq S$, return failure.
-\item Generate a symmetric encryption key $k_{\text{aead}} = \text{AEADKeyGen}(s_1 K)$; decrypt the value $v = \text{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v})$ (if $b=1$) and memo $m = \text{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})$.
-\item If $\com(v,\hash_{\text{val}}(s_1 K)) \neq C$, return failure.
-\item Compute the serial number $$s = \hash_{\text{ser}}(s_1 K,Q_1,Q_2) + s_2$$ and tag $$T = (1/s)(U - D).$$
+\item Parse the full view key as $\addr_{\text{full}} = (s_1, s_2, D, P_1, P_2)$.
+\item Arrange the corresponding incoming view key as $\addr_{\text{in}} = (s_1, P_1, P_2)$.
+\item Obtain the value and memo $(v, m) = \func{Identify}(\addr_{\text{in}},\func{Coin},\func{AddrTable})$ from the coin, and return failure if this operation fails.
+\item Use the resulting diversifier index $i$ and derived recovery key $K_{\text{der}}$ to compute the serial number $$s = \hash_{\text{ser}}(K_{\text{der}}) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output the tuple $(s, T, v, m)$.
 \end{enumerate}
 
 
-\subsection{Spend}
+\subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
-This algorithm allows a recipient to generate a transaction that consumes coins destined to its public address, and generates new coins destined for arbitrary public addresses.
+This algorithm allows a recipient to generate a transaction that consumes coins it controls, and generates new coins destined for arbitrary public addresses.
 The process is designed to be modular; in particular, only the full view key is required to generate the parallel one-out-of-many proof, which may be computationally expensive.
 The use of spend keys is only required for the final Chaum-Pedersen proof step, which is of lower complexity.
 
-It is assumed that the recipient has run the $\text{Recover}$ algorithm on all coins that it wishes to consume in such a transaction.
+It is assumed that the recipient has run the $\func{Recover}$ algorithm on all coins that it wishes to consume in such a transaction.
 
 \textbf{Inputs:}
 \begin{itemize}
     \item Security parameter $\lambda$ and public parameters $pp$
     \item A full view key $\addr_{\text{full}}$
     \item A spend key $\addr_{\text{sk}}$
-    \item A set of $N$ input coins $\text{InCoins}$ as part of a cover set
-    \item For each $u \in [0,w)$ coin to spend, the index in $\text{InCoins}$, serial number, tag, value, and recovery key: $(l_u, s_u, T_u, v_u, K_u)$
+    \item A set of $N$ input coins $\func{InCoins}$ as part of a cover set
+    \item For each $u \in [0,w)$ coin to spend, the index in $\func{InCoins}$, serial number, tag, value, and recovery key: $(l_u, s_u, T_u, v_u, K_u)$
     \item An integer fee value $f \in [0,v_{\text{max}})$
     \item A set of $t$ output coin public addresses, values, and memos: $$\{\addr_{\text{pk},j}, v_j, m_j\}_{j=0}^{t-1}$$
 \end{itemize}
@@ -360,43 +415,44 @@ It is assumed that the recipient has run the $\text{Recover}$ algorithm on all c
 \textbf{Outputs:} Spend transaction $\text{tx}_{\text{spend}}$
 
 \begin{enumerate}
-    \item Parse the required full view key component as $\addr_{\text{full}} = D$.
+    \item Parse the required full view key component $D$ from $\addr_{\text{full}}$.
     \item Parse the spend key $\addr_{\text{sk}} = (s_1, s_2, r)$.
-    \item Parse the cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
+    \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
-        \item Compute the serial number commitment offset: $$S_u' = \dcom(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
+        \item Compute the serial number commitment offset: $$S_u' = \comm(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
         \item Compute the value commitment offset: $$C_u' = \com(v_u, \hash_{\text{val}'}(s_u, D))$$
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
-        (\Pi_{\text{par}})_u = \text{ParProve}(pp_{\text{par}},\{S_i - S_u', C_i - C_u'\}_{i=0}^{N-1}; \\
+        (\Pi_{\text{par}})_u = \func{ParProve}(pp_{\text{par}},\{S_i, C_i\}_{i=0}^{N-1}, S_u',C_u'; \\
         (l_u, \hash_{\text{ser}'}(s_u, D), \hash_{\text{val}}(s_1 K_u) - \hash_{\text{val}'}(s_u, D)))
         \end{multline*}
     \end{enumerate}
-    \item Generate a set $\text{OutCoins} = \{\text{CreateCoin}(\addr_{\text{pk},j}, v_j, m_j, 0)\}_{j=0}^{t-1}$ of output coins.
-    \item Parse the output coin value commitments as $\text{OutCoins} = \{\overline{C}_j\}_{j=0}^{t-1}$, where each $\overline{C}_j$ contains a recovery key preimage $k_j$ and destination address component $(Q_1)_j$.
+    \item Generate a set $\func{OutCoins} = \{\func{CreateCoin}(\addr_{\text{pk},j}, v_j, m_j, 0)\}_{j=0}^{t-1}$ of output coins.
+    \item Parse the output coin value commitments $\{\overline{C}_j\}_{j=0}^{t-1}$ from $\func{OutCoins}$, where each $\overline{C}_j$ contains a recovery key preimage $k_j$ and destination address component $(Q_1)_j$.
     \item Generate a representation proof for balance assertion:
     \begin{multline*}
-    \Pi_{\text{bal}} = \text{RepProve}\left( pp_{\text{rep}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
+    \Pi_{\text{bal}} = \func{RepProve}\left( pp_{\text{rep}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
     \left. \sum_{u=0}^{w-1} \hash_{\text{val}'}(s_u,D) - \sum_{j=0}^{t-1} \hash_{\text{val}}(k_j(Q_1)_j) \right)
     \end{multline*}
-    \item Let $\mu = \hash_{\text{bind}}( \text{InCoins}, \text{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
-    \item For each $u \in [0,w)$, generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript: $$(\Pi_{\text{chaum}})_u = \text{ChaumProve}(pp_{\text{chaum}},S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D)))$$
+    \item Let $\mu = \hash_{\text{bind}}( \func{InCoins}, \func{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
+    \item Generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript:
+    \begin{multline*}
+    \Pi_{\text{chaum}} = \func{ChaumProve}((pp_{\text{chaum}}, \mu), \{S_u', T_u\}_{u=0}^{w-1}; \\
+    (\{s_u, r, -\hash_{\text{ser}'}(s_u, D)\}_{u=0}^{w-1}))
+    \end{multline*}
     \item Output the tuple:
     \begin{multline*}
-    \text{tx}_{\text{spend}} = ( \text{InCoins}, \text{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, (\Pi_{\text{chaum}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
+    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
 \end{enumerate}
-
-\begin{remark}
-We note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
-This observation can allow for the transfer of value into new coins without the use of a $\text{Mint}$ transaction, or a transfer of value to a transparent base layer.
+Note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
+This observation can allow for the transfer of value into new coins without the use of a mint transaction, or a transfer of value to a transparent base layer.
 Such transfer functionality is likely to introduce practical risk that is not captured by the protocol security model, and warrants thorough analysis.
-\end{remark}
 
 
-\subsection{Verify}
+\subsection{\texorpdfstring{$\func{Verify}$}{Verify}}
 
 This algorithm assesses the validity of a transaction.
 
@@ -406,10 +462,11 @@ This algorithm assesses the validity of a transaction.
 
 If the input transaction is a mint transaction:
 \begin{enumerate}
-    \item Parse the transaction $\text{tx}_{\text{mint}} = (\text{Coin}, \Pi_{\text{bal}})$.
-    \item Parse the coin value and value commitment as $\text{Coin} = (v, C)$.
+    \item Parse the transaction $\text{tx}_{\text{mint}} = (\func{Coin}, \Pi_{\text{bal}})$.
+    \item Parse the coin value, serial commitment, and value commitment $(v,S,C)$ from $\func{Coin}$.
+    \item If $S$ appears in an output coin from any previously-verified transaction, output 0.
     \item Check that $v \in [0,v_{\text{max}})$, and output 0 if this fails.
-    \item Check that $\text{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
+    \item Check that $\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
     \item Output 1.
 \end{enumerate}
 
@@ -417,23 +474,24 @@ If the input transaction is a spend transaction:
 \begin{enumerate}
     \item Parse the transaction:
     \begin{multline*}
-    \text{tx}_{\text{spend}} = ( \text{InCoins}, \text{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, (\Pi_{\text{chaum}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
+    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
-    \item Parse the cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
-    \item Parse the output coin value commitments and range proofs as $\text{OutCoins} = \{ \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$.
+    \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
+    \item Parse the output coin serial commitments, value commitments, and range proofs $\{ \overline{S}_j, \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
     \item For each $u \in [0,w):$
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
-        \item Check that $\text{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i - S_u',C_i - C_u'\}_{i=0}^{N-1})$, and output 0 if this fails.
-        \item Check that $\text{ChaumVerify}(pp_{\text{chaum}},(\Pi_{\text{chaum}})_u,S_u',T_u)$, and output 0 if this fails.
+        \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
     \end{enumerate}
-    \item For each $j \in [0,t):$
+    \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}((pp_{\text{chaum}},\mu),\Pi_{\text{chaum}},\{S_u',T_u\}_{u=0}^{w-1}),$$ and output 0 if this fails.
+    \item For each $j \in [0,t)$:
     \begin{enumerate}
-        \item Check that $\text{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
+        \item If $\overline{S}_j$ appears in an output coin in this transaction or in any previously-verified transaction, output 0.
+        \item Check that $\func{RangeVerify}(pp_{\text{rp}},(\Pi_{\text{rp}})_j,C)$, and output 0 if this fails.
     \end{enumerate}
     \item Check that $f \in [0,v_{\text{max}})$, and output 0 if this fails.
-    \item Check that $$\text{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
+    \item Check that $$\func{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{bal}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0) \right)$$ and output 0 if this fails.
     \item Output 1.
 \end{enumerate}
 
@@ -441,92 +499,143 @@ If the input transaction is a spend transaction:
 \section{Multisignature Operations}
 
 Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
-We describe a method for signing groups to perform the $\text{CreateAddress}$ and $\text{Spend}$ algorithms to produce multisignature addresses and spend transactions indistinguishable from others.
+We describe a method for signing groups to perform the $\func{CreateKeys}$ and $\func{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
+This method uses techniques from \cite{musig,schnorr,schnorrwithschnorr}.
+We defer a complete security analysis to future work.
 
-Throughout this section, suppose we have a group of $\nu$ signers who wish to collaboratively produce an address or transaction.
-Further, sample a cryptographic hash function $\hash_{\text{agg}}: \{0,1\}^* \to \F$ uniformly at random.
+Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
+Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
 
 
-\subsection{CreateAddress}
+\subsection{\texorpdfstring{$\func{CreateKeys}$}{CreateKeys}}
 
+To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the following two-round key generation process:
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $s_{1,\alpha}, s_{2,\alpha}, r_\alpha \in \F$ uniformly at random, and sets $D_\alpha = \dcom(0, r_\alpha, 0)$.
-It sends the the values $s_{1,\alpha}, s_{2,\alpha}, D_\alpha$ to all players.
-\item All players compute the aggregate incoming view key and full view key components:
-\begin{align*}
-s_1 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{1,\beta}\}_{\beta=0}^{\nu-1}, \alpha \right) s_{1,\alpha} \\
-s_2 &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{s_{2,\beta}\}_{\beta=0}^{\nu-1}, \alpha \right) s_{2,\alpha} \\
-D &= \sum_{\alpha=0}^{\nu-1} \hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) D_\alpha
-\end{align*}
-\item All players compute the aggregate public address components:
-\begin{align*}
-Q_1 &= \dcom(s_1, 0, 0) \\
-Q_2 &= \dcom(s_2, 0, 0) + D
-\end{align*}
+    \item Selects a set of coefficients $\{a_{\alpha,j}\}_{j=0}^{t-1} \subset \F$ uniformly at random, and uses them to define the polynomial $f_\alpha(x) = \sum_{j=0}^{t-1} a_{\alpha,j}x^j$.
+    \item Selects view key shares $s_{1,\alpha},s_{2,\alpha} \in \F \setminus \{0\}$ uniformly at random.
+    \item Produces a proof of knowledge of $a_{\alpha,0}$:
+    \begin{enumerate}
+        \item Chooses $k_\alpha \in \F$ uniformly at random.
+        \item Sets $R_\alpha = k_\alpha G$.
+        \item Sets $c_\alpha = \hash_{\text{pok}}(\alpha,a_{\alpha,0}G,R_\alpha)$.
+        \item Sets $\mu_\alpha = k_\alpha + a_{\alpha,0}c_\alpha$.
+    \end{enumerate}
+    \item Produces a vector of commitments $C_\alpha = \{a_{\alpha,j}G\}_{j=0}^{t-1}$ to its coefficients.
+    \item Sends the tuple $(R_\alpha,\mu_\alpha,C_\alpha,s_{1,\alpha},s_{2,\alpha})$ to all other players $1 \leq \beta \neq \alpha \leq \nu$.
+    \item On receipt of a tuple $(R_\beta,\mu_\beta,C_\beta,s_{1,\beta},s_{2,\beta})$ from another player $\beta$:
+    \begin{enumerate}
+        \item Checks that $s_{1,\beta} \neq 0$ and $s_{2,\beta} \neq 0$ and aborts otherwise.
+        \item Verifies the proof of knowledge by checking that $$\mu_\beta G - \hash_{\text{pok}}(\beta,C_{\beta,0},R_\beta)C_{\beta,0} = R_\beta$$ and aborting otherwise.
+    \end{enumerate}
+    \item For each $1 \leq \beta \leq \nu$, computes a player share $\widehat{r}_{\alpha,\beta} = f_\alpha(\beta)$ and sends it to player $\beta$.
+    \item On receipt of a player share $\widehat{r}_{\beta,\alpha}$ from another player $\beta$, verifies the share by checking that $$\sum_{j=0}^{t-1} \alpha^jC_{\beta,j} = \widehat{r}_{\beta,\alpha}G$$ and aborting otherwise.
+    \item Computes its private spend key share $r_\alpha = \sum_{\beta=1}^\nu \widehat{r}_{\beta,\alpha}$ and the group public spend key $D = \sum_{\beta=1}^\nu C_{\beta,0}$.
+    \item Computes the group view keys:
+    \begin{align*}
+        s_1 &= \sum_{\beta=1}^\nu \hash_{s_1}(\{s_{1,\gamma}\}_{\gamma=1}^\nu,\beta)s_{1,\beta} \\
+        s_2 &= \sum_{\beta=1}^\nu \hash_{s_2}(\{s_{2,\gamma}\}_{\gamma=1}^\nu,\beta)s_{2,\beta}
+    \end{align*}
+\end{enumerate}
+Using the tuple $(s_1,s_2,D)$, any player can additionally compute the base key components $P_1 = \comm(s_1,0,0)$ and $P_2 = \comm(s_2,0,0) + D$.
+Since each player holds the aggregate incoming view key, it can compute public addresses using $\func{CreateAddress}$ as needed.
 
-Note that each player $\alpha$ keeps its spend key share $r_\alpha$ private.
+\begin{remark}
+Because any player can produce a diversified address after these steps without interacting with other players, it can generate such an address with a large diversifier index.
+Since coin identification requires that an incoming view key holder precompute a hash table with expected diversidifer indexes, it is possible that another player may not properly identify coins sent to the large-index address.
+This means that a colluding threshold subset of signers can generate addresses and receive and spend coins without detection by non-colluding players.
+While this may be undesirable, it does not violate security requirements.
+Further, any such colluding set of players could simply engage in a separate key generation process to produce such addresses independent of non-colluding players.
+\end{remark}
+
+
+\subsection{\texorpdfstring{$\func{Precompute}$}{Precompute}}
+
+The signing group can reduce the communication complexity of proof generation by precomputing and sharing sets of nonce data.
+Each future signing operation uses one such nonce set for each signing player, which cannot be reused.
+The signing group can precompute as many nonce sets as needed for expected signing operations, and can perform this operation as needed.
+In particular, the group may wish to do so during the key generation process, where the added communication round may be less impactful than during later proof generation.
+
+To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ engages in the following one-round process:
+\begin{enumerate}
+    \item Generates a vector $L_\alpha$, where for $0 \leq k < \pi$ it selects $d_{\alpha,k},e_{\alpha,k} \in \F$ uniformly at random, sets $L_{\alpha,k} = (d_{\alpha,k}G,e_{\alpha,k}G)$, and then sends $L_\alpha$ to all other players.
+    \item On receipt of a vector $L_\beta$ from another player $\beta$, checks that $d_{\beta,k}G \neq 0$ and $e_{\beta,k}G \neq 0$ for all $0 \leq k < \pi$, and aborts otherwise.
 \end{enumerate}
 
 
-\subsection{Spend}
 
-Because all players possess the aggregate full view key corresponding to the aggregate public address, any player can use it to construct all transaction components except modified Chaum-Pedersen proofs.
-We describe now how the signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
-$$\{pp_{\text{chaum}}, S_u', T_u; (s_u, r, -\hash_{\text{ser}'}(s_u, D))\}$$
+\subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
+Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except the modified Chaum-Pedersen proof.
+We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
+$$\{pp_{\text{chaum}}, \{S_u', T_u\}_{u=0}^{w-1}; (\{s_u, r, -\hash_{\text{ser}'}(s_u, D)\}_{u=0}^{w-1})\}$$
+
+For the sake of notation convenience, we assume that the signing players are indexed $1 \leq \alpha \leq t$.
+Further, assume that each nonce list $L_\alpha$ contains $k + 1 \geq w$ unused nonces.
+We also assume the context binding value $\mu$ has been defined.
+Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-\item Each player $\alpha \in [0,\nu)$ chooses $\overline{r}_\alpha, \overline{s}_\alpha, \overline{t}_\alpha \in \F$ uniformly at random.
-It generates a commitment to the tuple $(\overline{r}_\alpha, \overline{s}_\alpha G, \overline{t}_\alpha)$ and sends it to all players.
-\item Each player reveals its commitment opening to all players, verifies all players' openings, and aborts if any are invalid.
-\item All players compute the initial proof terms:
-\begin{align*}
-A_1 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) F + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
-A_2 &= \left( \sum_{\beta=0}^{\nu-1} \overline{r}_\beta \right) T_u + \sum_{\beta=0}^{\nu-1} (\overline{s}_\alpha G) \\
-A_3 &= \left( \sum_{\beta=0}^{\nu-1} \overline{t}_\beta \right) H
-\end{align*}
-They compute the challenge $c$ from the initial proof transcript.
-\item Each player $\alpha \in [0,\nu)$ computes the following:
-\begin{align*}
-t_1 &= \sum_{\beta=0}^{\nu-1} \overline{r}_\beta + cs_u \\
-t_{2,\alpha} &= \overline{s}_\alpha + c\hash_{\text{agg}}\left( \{D_\beta\}_{\beta=0}^{\nu-1}, \alpha \right) r_\alpha \\
-t_3 &= \sum_{\beta=0}^{\nu-1} \overline{t}_\beta - c\hash_{\text{ser}'}(s_u, D)
-\end{align*}
-It sends $t_{2,\alpha}$ to all players.
-\item All players compute the final proof term: $$t_2 = \sum_{\beta=0}^{\nu-1} t_{2,\beta}$$
+    \item Parses the next available set of nonces $\{(d_{\beta,k-u}G,e_{\beta,k-u}G)\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute the following values:
+    $$\rho_u = \hash_{\rho}(\{\beta,d_{\beta,k-u}G,e_{\beta,k-u}G\}_{\beta=1}^{t},\mu,S_u',T_u)$$
+    \item Sets the initial proof commitments:
+    \begin{align*}
+        A_1 &= \sum_{u=0}^{w-1} \left( \hash_F(\rho_u)F + \hash_H(\rho_u)H + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right) \\
+        \{A_{2,u}\}_{u=0}^{w-1} &= \left\{ \hash_F(\rho_u)T_u + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right\}
+    \end{align*}
+    \item Computes the challenge $c$ using the proof transcript as in the original $\func{Spend}$ description.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $$t_{2,\alpha} = \sum_{u=0}^{w-1} (d_{\alpha,k-u} + \rho_u e_{\alpha,k-u} + \lambda_\alpha r_\alpha c^u),$$ and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( d_{\beta,k-u}G + \rho_u e_{\beta,k-u}G + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
+    \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
+    \begin{align*}
+        \{t_{1,u}\}_{u=0}^{w-1} &= \{ \hash_F(\rho_u) + c^u s_u \} \\
+        t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
+        t_3 &= \sum_{u=0}^{w-1} (\hash_H(\rho_u) - c^u \hash_{\text{ser}'}(s_u,D))
+    \end{align*}
 \end{enumerate}
 
 
-\section{Applications of Key Structures}
+\section{View Keys and Payment Proofs}
 
-The key structure in Spark permits flexible and useful functionality relating to transaction scanning and generation.
+The key and proof structures in Spark enable flexible and useful functionality relating to transaction scanning, generation, and disclosure.
 
-The incoming view key is used in $\text{Identify}$ operations to determine when a coin is directed to the associated public address, and to determine the coin's value and associated memo data.
+The incoming view key is used in $\func{Identify}$ operations to determine when a coin is directed to an associated public address, and to determine the coin's value and associated memo data.
 This permits two use cases of note.
 In one case, blockchain scanning can be delegated to a device or service without delegating spend authority for identified coins.
 In another case, wallet software in possession of a spend key can keep this key encrypted or otherwise securely stored during scanning operations, reducing key exposure risks.
 
-The full view key is used in $\text{Recover}$ operations to additionally compute the serial number and tag for coins directed to the associated public address.
+The full view key is used in $\func{Recover}$ operations to additionally compute the serial number and tag for coins directed to an associated public address.
 These tags can be used to identify a transaction spending the coin.
 Providing this key to a third party permits identification of incoming transactions and detection of outgoing transactions, which additionally provides balance computation, without delegating spend authority.
 Users like public charities may wish to permit public oversight of funds with this functionality.
 Other users may wish to provide this functionality to an auditor or accountant for bookkeeping purposes.
-In the case where a public address is used in threshold multisignature operations, a cosigner may wish to know if or when another cohort of cosigners has produced a transaction spending funds from its address.
+In the case where an address is used in threshold multisignature operations, a cosigner may wish to know if or when another cohort of cosigners has produced a transaction spending funds.
 
-Further, the full view key is used in $\text{Spend}$ to generate one-out-of-many proofs.
+Further, the full view key is used in $\func{Spend}$ to generate one-out-of-many proofs.
 Since the parallel one-out-of-many proof used in Spark can be computationally expensive, it may be unsuitable for generation by a computationally-limited device like a hardware wallet.
-Providing this key to a more powerful device enables easy generation of this proof (and other transaction components like range proofs), while ensuring that only the device holding the spend key can complete the transaction by generating the simple modified Chaum-Pedersen proofs.
+Providing this key to a more powerful device enables easy generation of this proof (and other transaction components like range proofs), while ensuring that only the device holding the spend key can complete the transaction by generating the simple modified Chaum-Pedersen proof.
+
+Payment proofs, which we introduce in Appendix \ref{app:payment}, allow for disclosure of data for individual coins.
+Specifically, a payment proof asserts in zero knowledge that the prover knows the secret data used to generate a given coin that is destined for a given public address.
+The proof convinces a verifier that the holder of the incoming view key for the public address can successfully identify the coin, as well as provides the verifier with the value and memo for the coin.
+Unlike view keys, which provide broad visibility into transactions associated to a public address, a payment proof is limited to a single coin and can be bound to an arbitrary proof context to prevent replay.
+
+Payment proofs may be useful in a number of circumstances.
+For example, a customer may issue a payment to a retailer, but fail to use the correct diversified address or memo required by the retailer to associate the payment to the customer's order.
+By providing the retailer with a payment proof, the customer can assert that it produced a coin destined for the retailer's address.
+In another use case, a business may wish to make public details of a donation to a charity without publicly disclosing its full view key.
+By providing a payment proof, anyone can verify that the specified coin was destined for the charity's address and confirm the value and memo associated to the coin.
 
 
 \section{Efficiency}
 
-It is instructive to examine the efficiency of $\text{Spend}$ transactions in size, generation complexity, and verification complexity.
+It is instructive to examine the efficiency of spend transactions in size, generation complexity, and verification complexity.
 In addition to our previous notation for parameters, let $v_{\text{max}} = 2^{64}$, so coin values and fees can be represented by $8$-byte unsigned integers.
 Further, suppose coin memos are fixed at $M$ bytes in length, with a $16$-byte authentication tag; this is the case for the ChaCha20-Poly1305 authenticated symmetric encryption construction, for example \cite{chachapoly}.
+Additionally, the arguments in \cite{schnorr} imply that Schnorr representation proofs can use truncated hash outputs for reduced proof size.
 Transaction size data for specific component instantiations is given in Table \ref{table:size}, where we consider the size in terms of group elements, field elements, and other data.
 Note that we do not include input ambiguity set references in this data, as this depends on implementation-specific selection and representation criteria.
 
 \begin{table}
-    \caption{$\text{Spend}$ transaction size by component}
+    \caption{Spend transaction size by component}
     \label{table:size}
     \centering
     \begin{tabular}{|l|l|r|r|r|}
@@ -535,30 +644,31 @@ Note that we do not include input ambiguity set references in this data, as this
         \hline
         $f$ & & & & $8$ \\
         $\Pi_{\text{rp}}$ & Bulletproofs+ & $2 \lceil \lg(64t) \rceil + 3$ & $3$ & \\
-        $\Pi_{\text{bal}}$ & Schnorr & & $2$ & \\
+        $\Pi_{\text{bal}}$ & Schnorr (short)& & $1.5$ & \\
+        $\Pi_{\text{chaum}}$ & this paper & $w + 1$ & $w + 2$ & \\
         \hline
         \multicolumn{5}{|c|}{Input data ($w$ coins)} \\
         \hline
         $(S',C')$ & & $2w$ & & \\
         $\Pi_{\text{par}}$ & this paper & $(2m + 4)w$ & $[m(n-1) + 4]w$ & \\
-        $\Pi_{\text{chaum}}$ & this paper & $3w$ & $3w$ & \\
         \hline
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
         $(S,K,C)$ & & $3t$ & & \\
+        $\Pi_{\text{rec}}$ & Schnorr (short) & & $1.5$ & \\
         $(\overline{v},\overline{m})$ & ChaCha20-Poly1305 & & & $(8 + M + 16)t$ \\
         \hline
     \end{tabular}
 \end{table}
 
-To evaluate the verification complexity of $\text{Spend}$ transactions using these components, we observe that verification in constructions like the parallel one-out-of-many proving system in this paper, Bulletproof+ range proving system, Schnorr representation proving system, and modified Chaum-Pedersen proving system in this paper all reduce to single linear combination evaluations in $\G$.
+To evaluate the verification complexity of spend transactions using these components, we observe that verification in constructions like the parallel one-out-of-many proving system in this paper, Bulletproof+ range proving system, Schnorr representation proving system, and modified Chaum-Pedersen proving system in this paper all reduce to single linear combination evaluations in $\G$.
 Because of this, proofs can be evaluated in batches if the verifier first weights each proof by a random value in $\F$, such that distinct group elements need only appear once in the resulting weighted linear combination.
 Notably, techniques like that of \cite{pippenger} can be used to reduce the complexity of such evaluations by up to a logarithmic factor.
 Suppose we wish to verify a batch of $B$ transactions, each of which spends $w$ coins and generates $t$ coins.
 Table \ref{table:time} shows the verification batch complexity in terms of total distinct elements of $\G$ that must be included in a linear combination evaluation.
 
 \begin{table}
-    \caption{$\text{Spend}$ transaction batch verification complexity for $B$ transactions with $w$ spent coins and $t$ generated coins}
+    \caption{Spend transaction batch verification complexity for $B$ transactions with $w$ spent coins and $t$ generated coins}
     \label{table:time}
     \centering
     \begin{tabular}{|l|r|}
@@ -567,7 +677,7 @@ Table \ref{table:time} shows the verification batch complexity in terms of total
         \hline
         Parallel one-out-of-many & $B[w(2m + 6) + 2m^m] + m^n + 1$ \\
         Bulletproofs+ & $B(t + 2\lg(64t) + 3) + 128T + 2$ \\
-        Modified Chaum-Pedersen & $B(5w) + 4$ \\
+        Modified Chaum-Pedersen & $B(3w + 1) + 4$ \\
         Schnorr & $B(w + t + 1) + 2$ \\
         \hline
     \end{tabular}
@@ -593,35 +703,78 @@ The authors gratefully acknowledge Nikolas Kr\"{a}tzschmar for identifying an ea
 \section{Modified Chaum-Pedersen Proving System}
 \label{app:chaum}
 
-The proving system is a tuple of algorithms $(\text{ChaumProve},\text{ChaumVerify})$ for the following relation:
-$$\left\{ pp_{\text{chaum}}, S, T \in \G ; (x, y, z) \in \F : S = xF + yG + zH, U = xT + yG \right\}$$
-
+The proving system is a tuple of algorithms $(\func{ChaumProve},\func{ChaumVerify})$ for the following relation:
+\begin{multline*}
+\left\{ pp_{\text{chaum}}, \{S_i, T_i\}_{i=0}^{l-1} \subset \G^2 ; (\{x_i, y_i, z_i\}_{i=0}^{l-1}) \subset \F^3 : \right. \\
+\left. \forall i \in [0,l), S_i = x_i F + y_i G + z_i H, U = x_i T_i + y_i G \right\}
+\end{multline*}
+Our protocol uses a power-of-challenge technique inspired by a method used for aggregating Schnorr signatures \cite{batchschnorr}.
 The protocol proceeds as follows:
 \begin{enumerate}
-    \item The prover selects random $r,s,t \in \F$.
-    It computes $$(A_1, A_2, A_3) := (rF + sG, rT + sG, tH)$$ and sends these values to the verifier.
+    \item The prover selects random $\{r_i,s_i\}_{i=0}^{l-1}, t \in \F$.
+    It computes the values
+    \begin{align*}
+        A_1 &= \sum_{i=0}^{l-1} r_i F + \sum_{i=0}^{l-1} s_i G + tH \\
+        \{A_{2,i}\}_{i=0}^{l-1} &= \{r_i T_i + s_i G\}_{i=0}^{l-1}
+    \end{align*}
+    and sends these values to the verifier.
     \item The verifier selects a random challenge $c \in \F$ and sends it to the prover.
-    \item The prover computes responses $$(t_1, t_2, t_3) := (r + cx, s + cy, t + cz)$$ and sends these values to the verifier.
-    \item The verifier accepts the proof if and only if $$A_1 + A_3 + cS = t_1 F + t_2 G + t_3 H$$ and $$A_2 + cU = t_1 T + t_2 G.$$
+    \item The prover computes responses
+    \begin{align*}
+        \{t_{1,i}\}_{i=0}^{l-1} &= \{r_i + c^{i+1} x_i\}_{i=0}^{l-1} \\
+        t_2 &= \sum_{i=0}^{l-1} (s_i + c^{i+1} y_i) \\
+        t_3 &= t + \sum_{i=0}^{l-1} c^{i+1} z_i
+    \end{align*}
+    and sends them to the verifier.
+    \item The verifier accepts the proof if and only if $$A_1 + \sum_{i=0}^{l-1} c^{i+1} S_i = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H$$ and $$\sum_{i=0}^{l-1} (A_{2,i} + c^{i+1} U) = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G.$$
 \end{enumerate}
 
+This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $c$ with the output of a cryptographic hash function on transcript inputs.
 We now prove that the protocol is complete, special sound, and special honest-verifier zero knowledge.
 
 \begin{proof}
-Completeness of this protocol follows trivially by inspection.
+Completeness of the protocol follows by inspection.
+
+We now show it is (l+1)-special sound by building a polynomial-time extractor as follows.
+Given a statement and initial proof transcript $(A_1, \{A_{2_i}\}_{i=0}^{l-1})$, the verifier sends $l+1$ distinct challenge values $c_0, c_1, \ldots, c_l$ and receives the corresponding transcript values $(\{t^0_{1,i}\}_{i=0}^{l-1}, t^0_2, t^0_3), \ldots, (\{t^l_{1,i}\}_{i=0}^{l-1}, t^l_2, t^l_3)$ from the prover.
+From the first verification equation, we build the following linear system:
+\begin{align*}
+A_1 + \sum_{i=0}^{l-1} c_0^{i+1} S_i &= \sum_{i=0}^{l-1} t^0_{1,i} F + t^0_2 G + t^0_3 H \\
+A_1 + \sum_{i=0}^{l-1} c_1^{i+1} S_i &= \sum_{i=0}^{l-1} t^1_{1,i} F + t^1_2 G + t^1_3 H \\
+&\vdotswithin{=} \\
+A_1 + \sum_{i=0}^{l-1} c_l^{i+1} S_i &= \sum_{i=0}^{l-1} t^l_{1,i} F + t^l_2 G + t^l_3 H
+\end{align*}
+
+Subtracting the first equation from the rest, we obtain another linear system:
+\begin{gather}
+\begin{aligned}
+\label{eqn:chaum}
+\sum_{i=0}^{l-1} (c_1^{i+1} - c_0^{i+1}) S_i &= \sum_{i=0}^{l-1} (t^1_{1,i} - t^0_{1,i})F + (t^1_2 - t^0_2)G + (t^1_3 - t^0_3)H \\
+\sum_{i=0}^{l-1} (c_2^{i+1} - c_0^{i+1}) S_i &= \sum_{i=0}^{l-1} (t^2_{1,i} - t^0_{1,i})F + (t^2_2 - t^0_2)G + (t^2_3 - t^0_3)H \\
+&\vdotswithin{=} \\
+\sum_{i=0}^{l-1} (c_l^{i+1} - c_0^{i+1}) S_i &= \sum_{i=0}^{l-1} (t^l_{1,i} - t^0_{1,i})F + (t^l_2 - t^0_2)G + (t^l_3 - t^0_3)H
+\end{aligned}
+\end{gather}
+
+Finally, we let the set $\{x_i\}_{i=0}^{l-1} \subset \F$ be defined through the following linear system:
+\begin{align*}
+\sum_{i=0}^{l-1} (c_1^{i+1} - c_0^{i+1})x_i &= \sum_{i=0}^{l-1} (t^1_{1,i} - t^0_{1_i}) \\
+\sum_{i=0}^{l-1} (c_2^{i+1} - c_0^{i+1})x_i &= \sum_{i=0}^{l-1} (t^2_{1,i} - t^0_{1_i}) \\
+&\vdotswithin{=} \\
+\sum_{i=0}^{l-1} (c_l^{i+1} - c_0^{i+1})x_i &= \sum_{i=0}^{l-1} (t^l_{1,i} - t^0_{1_i})
+\end{align*}
+Since each challenge is uniformly distributed at random, the square coefficient matrix corresponding to the system has nonzero determinant except with negligible probability, and hence the system is solvable for all $\{x_i\}_{i=0}^{l-1}$.
+Further, we can form similar linear systems to define corresponding $\{y_i\}_{i=0}^{l-1}$ and $\{z_i\}_{i=0}^{l-1}$ such that we let $S_i = x_i F + y_i G + z_i H$ and the equations in system \ref{eqn:chaum} hold.
+
+It remains to show that these solutions are unique; that is, that no $S_i$ has a different representation with coefficients $x_i',y_i',z_i'$ consistent with successful verification.
+If this were the case, then we must have the polynomial equation $\sum_{i=0}^{l-1} c^{i+1}(x_i - x_i') = 0$ in $c$; however, since $c$ is selected randomly by the verifier, all coefficients of the polynomial must (with overwhelming probability) be zero by the Schwartz-Zippel lemma.
+Hence each $x_i = x_i'$ (and by the same reasoning, $y_i = y_i'$ and $z_i = z_i'$), and the extracted witness set is unique.
 
 To show the protocol is special honest-verifier zero knowledge, we construct a valid simulator producing transcripts identically distributed to those of valid proofs.
-The simulator chooses a random challenge $c \in \F$, random scalar values $t_1, t_2, t_3 \in \F$, and a random value $A_1 \in \G$.
-It sets $A_2 := t_1 T + t_2 H - cU$ and $A_3 := t_1 F + t_2 G + t_3 H - cS - A_1$.
-Such a transcript will be accepted by an honest verifier.
+The simulator chooses a random challenge $c \in \F$ and random values $\{t_{1,i}\}_{i=0}^{l-1}, t_2, t_3 \in \F$.
+It also randomly selects $\{A_{2,i}\}_{i=1}^{l-1} \in \G$, and sets $$A_1 = \sum_{i=0}^{l-1} t_{1,i} F + t_2 G + t_3 H - \sum_{i=0}^{l-1} c^{i+1} S_i$$ and $$A_{2,0} = \sum_{i=0}^{l-1} t_{1,i} T_i + t_2 G - \sum_{i=1}^{l-1} A_{2,i} -  \sum_{i=0}^{l-1} c^{i+1} U.$$
+The forms of $A_1$ and $A_{2,0}$ are defined such that the verification equations hold, and therefore such a transcript will be accepted by an honest verifier.
 Observe that all transcript elements in a valid proof are independently distributed uniformly at random if the generators $F,G,H,U$ are independent, as are transcript elements produced by the simulator.
-
-To show the protocol is special sound, consider two accepting transcripts with distinct challenge values $c \neq c' \in \F$:
-$$(A_1, A_2, A_3, c, t_1, t_2, t_3)$$
-and
-$$(A_1, A_2, A_3, c', t'_1, t'_2, t'_3)$$
-The first verification equation applied to the two transcripts implies that $$(c - c')S = (t_1 - t'_1)F + (t_2 - t'_2)G + (t_3 - t'_3)H,$$ so we extract the witness values $x := (t_1 - t'_1)/(c - c')$ and $y := (t_2 - t'_2)/(c - c')$ and $z := (t_3 - t'_3)/(c - c')$, or a nontrivial discrete logarithm relation between $F,G,H$ (a contradiction if these generators are independent).
-Similarly, the second verification equation implies that $$(c - c')U = (t_1 - t'_1)T + (t_2 - t'_2)G,$$ yielding the same values for $x$ and $y$ as required.
 
 This completes the proof.
 \end{proof}
@@ -630,109 +783,192 @@ This completes the proof.
 \section{Parallel One-out-of-Many Proving System}
 \label{app:parallel}
 
-The proving system itself is a tuple of algorithms $(\text{ParProve},\text{ParVerify})$ for the following relation, where we let $N = n^m$:
+The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
-\left\{ pp_{\text{par}}, \{S_i,V_i\}_{i=0}^{N-1} \subset \G^2 ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l = \com(0,s), V_l = \com(0,v) \right\}
+\left\{ pp_{\text{par}}, \{S_k,V_k\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
+\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
-The protocol is shown in Figure \ref{fig:groth}, where we use the notation of \cite{lelantus}.
+Let $\delta(i,j): \mathbb{N}^2 \to \F$ be the Kronecker delta function.
+For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary decomposition of $k$.
 
-\begin{figure}
-\centering
-\begin{math}
-\begin{array}{@{}l@{}c@{}l@{}}
-\displaystyle \text{ParProve}\left(pp_{\text{par}}, \{S_i, V_i\}_{i=0}^{N-1}; (l,s,v)\right) && \text{ParVerify}\left(pp_{\text{par}}, \{S_i, V_i\}_{i=0}^{N-1}\right) \\\\
-\text{Compute:} && \text{Accept if and only if:}\\
-r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \gets_R \F\\
-\forall j \in [0,m) \\
-\qquad a_{j,0} = -\sum _{i=1}^{n-1}a_{j,i}\\\\
-A \equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
-B \equiv \com(\{\sigma_{l_{j},i}\}_{j,i=0}^{m-1,n-1}, r_B) \\
-C \equiv \\ \quad \com(\lbrace a_{j,i}(1-2\sigma_{l_j,i})\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
-D \equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D) \\\\
-\forall j \in [0,m) &    \\
-\qquad \rho^S_j, \rho^V_j \gets_R \F &\\\\
+The protocol proceeds as follows, where we use some of the notation of \cite{lelantus,triptych}:
+\begin{enumerate}
+    \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
+    \item The prover computes the following:
+    \begin{align*}
+        A &\equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
+        B &\equiv \com(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
+        C &\equiv \com(\lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
+        D &\equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
+    \end{align*}
+    \item For each $j \in [0,m)$, the prover selects $\rho^S_j, \rho^V_j \in \F$ uniformly at random, and computes the following:
+    \begin{align*}
+        G^S_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(S_k - S') + \com(0, \rho^S_j) \\
+        G^V_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(V_k - V') + \com(0, \rho^V_j)
+    \end{align*}
+    Here each $p_{k,j}$ is defined such that for all $k \in [0,N)$ we have $$\prod_{j=0}^{m-1} \left( \delta(l_j,k_j)x + a_{j,k_j} \right) = \delta(l,k)x^m + \sum_{j=0}^{m-1} p_{k,j}x^j$$ for indeterminate $x$.
+    \item The prover sends $A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1}$ to the verifier.
+    \item The verifier selects $x \in \F$ uniformly at random and sends it to the prover.
+    \item For each $j \in [0,m)$ and $i \in [1,n)$, the prover computes $f_{j,i} \equiv \delta(l_{j},i)x + a_{j,i}$ and the following values:
+    \begin{align*}
+        z_A &\equiv r_A + xr_B \\
+        z_C &\equiv xr_C + r_D \\
+        z_S &\equiv sx^m -  \sum_{j=0}^{m-1}\rho^S_j x^j \\
+        z_V &\equiv vx^m - \sum_{j=0}^{m-1}\rho^V_j x^j
+    \end{align*}
+    \item The prover sends $\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}, z_A, z_C, z_S, z_V$ to the verifier.
+    \item For each $j \in [0,m)$, the verifier sets $f_{j,0} \equiv x - \sum_{i=1}^{n-1} f_{j,i}$ and accepts the proof if and only if
+    \begin{align*}
+        A + xB &= \com(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, z_A) \\
+        xC + D &= \com(\lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z_C) \\
+    \end{align*}
+    and
+    \begin{align*}
+        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=0}^{m-1} x^jG^S_j &= \com(0, z_S) \\
+        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=0}^{m-1} x^jG^V_j &= \com(0, z_V)
+    \end{align*}
+    are true.
+\end{enumerate}
 
-\qquad G^V_j \equiv \sum_{i=0}^{N-1}p_{i,j}V_i + \com(0, \rho^V_j )    &  A,B,C,D, & \\
-\qquad G^S_j \equiv \sum_{i=0}^{N-1}p_{i,j}S_i + \com(0, \rho^S_j)& \lbrace G^S_j, G^V_j \rbrace_{j=0}^{m-1} \\
-\qquad \qquad \text{(computing } p_{i,j}  & \xrightarrow{\qquad \qquad \qquad} & A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1} \in \G \\
-\qquad \qquad \text{ as in the orig. paper) } \\
+This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $x$ with the output of a cryptographic hash function on transcript inputs.
+Proofs of completeness and special soundness are nearly identical to those of \cite{lelantus,triptych}, with only trivial and straightforward modifications.
+For clarity, we prove that the protocol is special honest-verifier zero knowledge.
 
+\begin{proof}
+    To show that the protocol is special honest-verifier zero knowledge, we construct a simulator that, when provided a random verifier challenge $x$, produces a proof transcript identically distributed to that of a real proof.
 
-\forall j \in [0,m), i \in [1,n) & \xleftarrow{x \gets \lbrace 0,1 \rbrace^\lambda} &  \\
-\qquad f_{j,i} \equiv \sigma_{l_{j}i}x + a_{j,i} &&  \\
-z_A = r_B x + r_A & \\
-z_C = r_C x + r_D & \{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}\\
-z_S = sx^m -  \sum_{j=0}^{m-1}\rho^S_j x^j & z_A, z_C, z_S, z_V & \lbrace f_{j,i}\rbrace_{j,i =0,1}^{m-1,n-1} \in \F \\
-z_V = vx^m - \sum_{j=0}^{m-1}\rho^V_h x^j &\xrightarrow{ \qquad \qquad } & z_A, z_C, z_V, z_R \in \F  \\
+    As in \cite{triptych}, we note that the simulator presented in \cite{bootle} applies directly to our context.
+    To produce our simulated transcript on random $x$, the simulator samples $B,\{G^S_j,G^V_j\}_{j=1}^{m-1} \in \G$ and $z_S,z_V \in \F$ uniformly at random.
+    It runs the simulator presented in \cite{bootle} to obtain $A,C,D \in \G$ and $z_A,z_C,\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$ and computes $\{f_{j,0}\}_{j=0}^{m-1}$ uniquely according to the protocol:
+    $$f_{j,0} = x - \sum_{i=1}^{n-1} f_{j,i}$$
+    It uses the final two verification equations to compute $G^S_0$ and $G^V_0$:
+    \begin{alignat*}{1}
+        G^S_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=1}^{m-1} x^jG^S_j - \com(0, z_S) \\
+        G^V_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=1}^{m-1} x^jG^V_j - \com(0, z_V)
+    \end{alignat*}
 
-&& \forall j: f_{j,0} := x - \sum_{i=0}^{n-1} f_{j,i} \\\\
-&& D+xC =  \\
-&& \com( \lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}; z_C) \\
-&& A+xB =  \\
-&& \com( \lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1};z_A) \\\\
-&& \sum_{i=0}^{N-1}\overline{f}_i S_i - \sum_{j=0}^{m-1} x^j G^S_j \\
-&& \qquad \qquad = \com(0, z_S) \\
-& & \sum_{i=0}^{N-1}\overline{f}_i V_i - \sum_{j=0}^{m-1} x^j G^V_j \\
-& & \qquad \qquad = \com(0, z_V) \\
-&&  \text{where } \overline{f}_i \equiv \prod_{j=0}^{m-1} f_{j,i_j}
-\end{array}
-\end{math}
-\caption{Parallel one-out-of-many protocol}
-\label{fig:groth}
-\end{figure}
-
-This protocol is complete, special sound, and special honest-verifier zero knowledge; the proof is essentially the same as in the original construction, with only minor straightforward modifications.
-
+    The transcript elements produced by the simulator in \cite{bootle} are identically distributed to those in real proofs by construction.
+    Since $\{\rho^S_j,\rho^V_j\}_{j=0}^{m-1}$ is sampled uniformly at random in a real proof and the decisional Diffie-Hellman problem is hard in $\G$, the set $\{G^S_j,G^V_j\}_{j=0}^{m-1}$ is independent and uniformly distributed in the simulation and in real proofs.
+    Finally, $z_S$ and $z_V$ are independent and uniformly distributed in both the simulation and in real proofs since $x$ was sampled randomly.
+    Hence the protocol is special honest-verifier zero knowledge.
+\end{proof}
 
 \section{Payment System Security}
+\label{app:security}
  
 Zerocash \cite{zerocash} established a robust security framework for decentralized anonymous payment (DAP) scheme security that captures a realistic threat model with powerful adversaries who are permitted to add malicious coins into transactions' input ambiguity sets, control the choice of transaction inputs, and produce arbitrary transactions to add to a ledger.
 Here we formally prove Spark's security within a related (but modified) security model; proofs follow somewhat similarly to that of \cite{zerocash}.
 
-We recall the security definition for a DAP scheme $$\Pi = (\text{Setup}, \text{CreateAddress}, \text{Mint}, \text{Spend}, \text{Recover}, \text{Verify}),$$ which is secure if it satisfies definitions for ledger indistinguishability, transaction non-malleability, and balance security properties, which we define below.
+We recall the security definition for a DAP scheme $$\Pi = (\func{Setup}, \func{CreateAddress}, \func{Mint}, \func{Spend}, \func{Recover}, \func{Verify}),$$ which is secure if it satisfies definitions for ledger indistinguishability, transaction non-malleability, and balance security properties, which we define below.
 
 Each security property is formalized as a game between a polynomial-time adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, where in each game the behavior of honest parties is simulated via an oracle $\mathcal{O}^{DAP}$.
-The oracle $\mathcal{O}^{DAP}$ maintains a ledger $L$ of transactions and provides an interface for executing \text{CreateAddress}, \text{Mint}, and \text{Spend} algorithm operations for honest parties.
+The oracle $\mathcal{O}^{DAP}$ maintains a ledger $L$ of transactions and provides an interface for executing $\func{CreateAddress}$, $\func{Mint}$, and $\func{Spend}$ algorithm operations for honest parties.
 To simulate behavior from honest parties, $\mathcal{A}$ passes a query to $\mathcal{C}$, which makes sanity checks and then proxies the queries to $\mathcal{O}^{DAP}$, returning the responses to $\mathcal{A}$ as needed.
-For \text{CreateAddress} queries, $\mathcal{C}$ runs the \text{CreateAddress} protocol algorithm and returns the public address $\addr_{pk}$ to $\mathcal{A}$.
-For \text{Mint} queries, the adversary specifies the value and destination public address for the transaction, and the resulting transaction is produced and returned by $\mathcal{C}$ if valid.
-For \text{Spend} queries, the adversary specifies the input coins to be consumed, as well as the values and destination public addresses for the transaction, and the resulting transaction is produced (after $\mathcal{C}$ recovers the consumed coins) and returned by $\mathcal{C}$ if valid.
-The oracle $\mathcal{O}^{DAP}$ also provides an \text{Insert} query that allows the adversary to insert arbitrary and potentially malicious $\text{tx}_{\text{mint}}$ or $\text{tx}_{\text{spend}}$ transactions to the ledger $L$, provided they are valid.
+For $\func{CreateAddress}$ queries, $\mathcal{C}$ first runs the $\func{CreateKeys}$ protocol algorithm, then calls $\func{CreateAddress}$ using the resulting incoming view key and a randomly-selected diversifier index, and finally returns the public address $\addr_{\text{pk}}$ to $\mathcal{A}$.
+For $\func{Mint}$ queries, the adversary specifies the value and destination public address for the transaction, and the resulting transaction is produced and returned by $\mathcal{C}$ if valid.
+For $\func{Spend}$ queries, the adversary specifies the input coins to be consumed, as well as the values and destination public addresses for the transaction, and the resulting transaction is produced (after $\mathcal{C}$ recovers the consumed coins) and returned by $\mathcal{C}$ if valid.
+The oracle $\mathcal{O}^{DAP}$ also provides an $\func{Insert}$ query that allows the adversary to insert arbitrary and potentially malicious $\text{tx}_{\text{mint}}$ or $\text{tx}_{\text{spend}}$ transactions to the ledger $L$, provided they are valid.
 
 For each security property, we say the DAP satisfies the property if the adversary can win the corresponding game with only negligible probability.
 
-\begin{remark}
-We also require the DAP scheme to be complete, which implies that any unspent coin (with unique partial serial number commitment opening $(s,r,-)$ on the ledger can be spent.
-This property means that if the coin appears on the ledger $L$ as an output of a transaction, but its corresponding tag is not revealed in any valid transaction, then a user in possession of the corresponding address spend key can generate a valid $\text{Spend}$ transaction consuming it.
+We now state a lemma that will be useful when examining the security of our construction.
 
-Note that if the spend key holder cannot produce such a valid transaction, by construction the coin's tag must already appear in a previous valid transaction.
-Such a previous valid transaction must have a modified Chaum-Pedersen proof that extracts, in part, the address's private spend key $r$, a contradiction since the adversary has only a negligible advantage in discrete logarithm extraction.
+\begin{lemma}\label{lem:extract}
+    Given a ledger, two otherwise valid spend transactions reveal the same tag only if there exist coins with serial commitments $S_1,S_2$ produced in previous valid transactions and an extractor that produces representations of the following form:
+    \begin{alignat*}{1}
+        S_1 &= \comm(x,y,\beta_1) \\
+        S_2 &= \comm(x,y,\beta_2)
+    \end{alignat*}
+\end{lemma}
+
+\begin{proof}
+    Let $T$ be the tag common to the two spend transactions.
+    Each transaction has a valid modified Chaum-Pedersen proof.
+    One transaction's valid proof yields statement values $T,S_1' \in \G$ and witness values $x_1,y_1,z_1 \in \F$ such that $U = x_1 T + y_1 G$ and $S_1' = x_1 F + y_1 G + z_1 H$.
+    Similarly, the other transaction's valid proof yields statement values $T,S_2' \in \G$ and witness values $x_2,y_2,z_2 \in \F$ such that $U = x_2 T + y_2 G$ and $S_2' = x_2 F + y_2 G + z_2 H$.
+    Since $U$ and $G$ are independent and Pedersen commitments are computationally binding, we must have (except with negligible probability) that $x_1 = x_2 = x$ and $y_1 = y_2 = y$.
+    Hence $S_1' = xF + yG + z_1 H$ and $S_2' = xF + yG + z_2 H$.
+
+    Each transaction further has a valid parallel one-of-many proof.
+    From the first transaction's proof we have (by index extraction referencing an element of its input cover set) a group element $S_1 \in \G$ and scalar $\alpha_1 \in \F$ such that $S_1 - S_1' = \alpha_1 H$.
+    For the second proof, we similarly have $S_2 \in \G$ and $\alpha_2 \in \F$ such that $S_2 - S_2' = \alpha_2 H$.
+
+    This means in particular that $$S_1 = xF + yG + (z_1 + \alpha_1)H$$ and $$S_2 = xF + yG + (z_2 + \alpha_2)H$$ by combining these results.
+    Since transaction validity requires all input cover set elements to exist as outputs of previous valid transactions, we have extracted representations of the desired form by setting $\beta_1 = z_1 + \alpha_1$ and $\beta_2 = z_2 + \alpha_2$.
+\end{proof}
+Observe that the result also holds for duplicate tags revealed in the same (otherwise valid) transaction, with almost identical reasoning.
+
+\subsection{Completeness}
+
+Completeness requires that no bounded adversary can prevent an honest user from spending a coin.
+Specifically, this means that if the user is able to recover a coin using its full view key, then it can generate a valid spend transaction consuming the coin.
+This definition is intended to ensure that only an honest user can generate a transaction revealing a tag for a coin it controls.
+
+To see why this property holds, note that by construction, if an honest user is unable to produce a spend transaction for a coin with serial commitment $S$ that it has recovered, the corresponding tag $T$ must appear in a previous valid transaction.
+The recovered coin $S$ must be a commitment of the form $S = \comm(s,r,0)$ for serial number $s$ and spend key component $r$ according to the $\func{Recover}$ definition.
+By Lemma \ref{lem:extract}, any previous transaction revealing $T$ must consume a coin with serial commitment $\overline{S} = \comm(s,r,z)$ for $z \neq 0$ (since coins must have unique serial commitments).
+Since the user cannot have recovered $\overline{S}$ because $z$ is nonzero, it did not generate the transaction consuming $\overline{S}$, a contradiction since that transaction implies knowledge of the spend key $r$ by extraction.
+
+\begin{remark}
+\label{rmk:janus}
+It will be useful to assert that if the holder of an incoming view key is able to identify a coin, or if the holder of the corresponding full view key is able to recover a coin, then the coin serial number commitment computationally binds uniquely to a public address produced from $\func{CreateAddress}$ on the incoming view key for some diversifier index.
+
+It is straightforward to show this property holds.
+Successful execution of either the $\func{Identify}$ or $\func{Recover}$ algorithms implies in particular the verification $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,(1/\hash_{Q_0}(s_1,i))K)$$ for the diversifier index $i$ obtained from a hash table query, so the sender asserts knowledge of a value $k \in \F$ such that $$kF = \frac{1}{\hash_{Q_0}(s_1,i)}K,$$ from which it follows that
+$$K = k\hash_{Q_0}(s_1,i)F = kQ_{0,i}.$$
+Hence the serial number commitment can be expressed as follows:
+\begin{align*}
+S &= \comm(\hash_{\text{ser}}(s_1 K), 0, 0) + Q_{2,i} \\
+&= \comm(\hash_{\text{ser}}(s_1 kQ_{0,i}), 0, 0) + Q_{2,i} \\
+&= \comm(\hash_{\text{ser}}(kQ_{1,i}), 0, 0) + Q_{2,i}
+\end{align*}
+Since diversified address components are produced using queries against independent cryptographic hash functions on the incoming view key $s_1$ and diversifier index $i$, they are unique and the desired binding holds.
+\end{remark}
+
+\begin{remark}
+The construction in Remark \ref{rmk:janus} for asserting that valid coins uniquely and correctly bind to diversified addresses can be simplified and made more efficient.
+To do so, the representation proof $\Pi_{\text{rec}}$ is removed.
+When constructing a coin using $\func{CreateCoin}$, the sender embeds the value $kF$ into the symmetric encryption key:
+$$k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}},kF)$$
+During coin identification using $\func{Identify}$ or recovery using $\func{Recover}$, the recipient computes the key after producing the diversifier index $i$:
+$$k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}},(1/\hash_{Q_0}(s_1,i))K)$$
+Provided that the subsequent verification and decryption using $\func{AEADDecrypt}$ succeed, the inputs to $\func{AEADKeyGen}$ must be identical (except perhaps with negligible probability):
+$$kF = \frac{1}{\hash_{Q_0}(s_1,i)}K$$
+
+However, in order to apply the reasoning of Remark \ref{rmk:janus} for the representation of the recovery key $K$, we must assert the existence of an efficient extractor for the recovery key preimage $k$.
+To do so, we require an additional knowledge-of-exponent assumption introduced in \cite{kea_damgard} and described in more detail in \cite{kea_bellare} (as KEA1).
+Roughly speaking, this assumption states that successful completion of a Diffie-Hellman triple implies knowledge of a suitable exponent via the existence of an efficient extractor for it.
+We refer the reader to \cite{kea_bellare} for the complete formalization, but describe here why our construction meets the requirements for the existence of the extractor.
+
+To enable a sender to generate a coin using $\func{CreateCoin}$, the recipient provides some $Q_{0,i}$ (as part of a complete diversified address) and the global public parameter $F = (1/\hash_{Q_0}(s_1,i))Q_{0,i}$.
+In addition to the recovery key $K$, successful AEAD decryption implies the sender has provided (except with negligible probability) the value $(1/\hash_{Q_0}(s_1,i))K$.
+From this, the KEA1 assumption asserts the existence of an efficient extractor producing $k \in \F$ such that $K = kQ_{0,i}$.
+The reasoning of Remark \ref{rmk:janus} then applies.
 \end{remark}
 
 
 \subsection{Balance}
 
 Balance requires that no bounded adversary $\mathcal{A}$ can control more coins than are minted or spent to it.
-It is formalized by a \textbf{BAL} game.
-The adversary $\mathcal{A}$ adaptively interacts with $\mathcal{C}$ and the oracle with queries, and at the end of the interaction outputs a set of coins $\text{AdvCoins}$.
-Letting $\text{ADDR}$ be set of all addresses of honest users generated by \text{CreateAddress} queries, $\mathcal{A}$ wins the game if
-$$v_{\text{unspent}} + v_{\mathcal{A} \to \text{ADDR}} > v_{\text{mint}} + v_{\text{ADDR} \to \mathcal{A}},$$
+It is formalized by a $\func{BAL}$ game.
+The adversary $\mathcal{A}$ adaptively interacts with $\mathcal{C}$ and the oracle with queries, and at the end of the interaction outputs a set of coins $\func{AdvCoins}$.
+Letting $\func{ADDR}$ be set of all addresses of honest users generated by $\func{CreateAddress}$ queries, $\mathcal{A}$ wins the game if
+$$v_{\text{unspent}} + v_{\mathcal{A} \to \func{ADDR}} > v_{\text{mint}} + v_{\func{ADDR} \to \mathcal{A}},$$
 which implies that the total value the adversary can spend or has spent already is greater than the value it has minted or received.
 Here:
 \begin{itemize}
-    \item $v_{\text{unspent}}$ is the total value of unspent coins in $\text{AdvCoins}$;
-    \item $v_{\text{mint}}$ is the total value minted by $\mathcal{A}$ to itself through \text{Mint} or \text{Insert} queries;
-    \item $v_{\text{ADDR} \xrightarrow{} \mathcal{A}}$ is the total value of coins received by $\mathcal{A}$ from addresses in \text{ADDR}; and
-    \item $v_{\mathcal{A} \xrightarrow{} \text{ADDR}}$ is the total value of coins sent by the adversary to the addresses in \text{ADDR}.
+    \item $v_{\text{unspent}}$ is the total value of unspent coins in $\func{AdvCoins}$;
+    \item $v_{\text{mint}}$ is the total value minted by $\mathcal{A}$ to itself through $\func{Mint}$ or $\func{Insert}$ queries;
+    \item $v_{\func{ADDR} \xrightarrow{} \mathcal{A}}$ is the total value of coins received by $\mathcal{A}$ from addresses in $\func{ADDR}$; and
+    \item $v_{\mathcal{A} \xrightarrow{} \func{ADDR}}$ is the total value of coins sent by the adversary to the addresses in $\func{ADDR}$.
 \end{itemize}
-We say a DAP scheme $\Pi$ is \textbf{BAL}-secure if the adversary $\mathcal{A}$ wins the game \textbf{BAL} only with negligible probability:
-$$\text{Pr}[\text{\textbf{BAL}}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
+We say a DAP scheme $\Pi$ is $\func{BAL}$-secure if the adversary $\mathcal{A}$ wins the game $\func{BAL}$ only with negligible probability:
+$$\text{Pr}[\func{BAL}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
 
 Assume the challenger maintains an extra augmented ledger $(L, \vec{a})$ where each $a_i$ contains secret data from transaction $\text{tx}_i$ in $L$.
 In that case where $\text{tx}_i$ was produced by a query from $\mathcal{A}$ to the challenger $\mathcal{C}$, $a_i$ contains all secret data used by $\mathcal{C}$ to produce the transaction.
-If instead $\text{tx}_i$ was produced by a direct $\text{Insert}$ query from $\mathcal{A}$, $a_i$ consists of all extracted witness data from proofs contained in the transaction.
+If instead $\text{tx}_i$ was produced by a direct $\func{Insert}$ query from $\mathcal{A}$, $a_i$ consists of all extracted witness data from proofs contained in the transaction.
 The resulting augmented ledger $(L, \vec{a})$ is balanced if the following conditions are true:
 \begin{enumerate}
     \item\label{cond:distinct} Each valid spend transaction $\text{tx}_{\text{spend},k}$ in $(L, \vec{a})$ consumes distinct coins, and each consumed coin is the output of a valid $\text{tx}_{\text{mint},i}$ or $\text{tx}_{\text{spend},j}$ transaction for some $i < k$ or $j < k$.
@@ -744,8 +980,8 @@ The resulting augmented ledger $(L, \vec{a})$ is balanced if the following condi
     
     \item\label{cond:value} For each $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ consuming input coins with value commitments $\{C_u\}_{u=0}^{w-1}$, for each $u \in [0,w)$:
     \begin{itemize}
-        \item If $C_u$ is the output of a valid \text{Mint} transaction with augmented ledger witness $a'$, then the value of $C_u$ contained in $a'$ is the same as the corresponding value contained in $a$ for the value commitment offset $C_u'$.
-        \item If $C_u$ is the output of a valid \text{Spend} transaction with augmented ledger witness $a'$, then the value of $C_u$ contained in $a'$ is the same as the corresponding value contained in $a$ for the value commitment offset $C_u'$.
+        \item If $C_u$ is the output of a valid mint transaction with augmented ledger witness $a'$, then the value of $C_u$ contained in $a'$ is the same as the corresponding value contained in $a$ for the value commitment offset $C_u'$.
+        \item If $C_u$ is the output of a valid spend transaction with augmented ledger witness $a'$, then the value of $C_u$ contained in $a'$ is the same as the corresponding value contained in $a$ for the value commitment offset $C_u'$.
     \end{itemize}
     This implies that values are maintained between transactions.
     
@@ -755,62 +991,58 @@ The resulting augmented ledger $(L, \vec{a})$ is balanced if the following condi
     For each $(\text{tx}_{\text{mint}}, a)$ in $(L, \vec{a})$ with public value $v$ that generates a coin with value commitment $C$, $a$ contains a value $v'$ corresponding to the commitment such that $v = v'$.
     This implies that values cannot be created arbitrarily.
     
-    \item\label{cond:honest} For each $\text{tx}_{\text{spend}}$ in $(L, \vec{a})$ inserted by $\mathcal{A}$ through an \text{Insert} query, each consumed coin in $\text{tx}_{\text{spend}}$ is not recoverable by any address in $\text{ADDR}$.
+    \item\label{cond:honest} For each $\text{tx}_{\text{spend}}$ in $(L, \vec{a})$ inserted by $\mathcal{A}$ through an \text{Insert} query, each consumed coin in $\text{tx}_{\text{spend}}$ is not recoverable by any address in $\func{ADDR}$.
     This implies that the adversary cannot generate a transaction consuming coins it does not control.
 \end{enumerate}
 If these five conditions hold, then $\mathcal{A}$ did not spend or control more money than was previously minted or spent to it, and the inequality
-$$v_{\text{mint}} + v_{\text{ADDR} \to \mathcal{A}} \leq v_{\text{unspent}} + v_{\mathcal{A} \to \text{ADDR}}$$
+$$v_{\text{mint}} + v_{\func{ADDR} \to \mathcal{A}} \leq v_{\text{unspent}} + v_{\mathcal{A} \to \func{ADDR}}$$
 holds.
-We now prove that Spark is \textbf{BAL}-secure under this definition.
+We now prove that Spark is $\func{BAL}$-secure under this definition.
 
 \begin{proof}
 By way of contradiction, assume the adversary $\mathcal{A}$ interacts with $\mathcal{C}$ leading to a non-balanced augmented ledger $(L, \vec{a})$ with non-negligible probability; then at least one of the five conditions described above is violated with non-negligible probability:
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:distinct}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition 1 is non-negligible.
-Each $\text{tx}_{\text{spend}}$ generated by a non-$\text{Insert}$ oracle query satisfies this condition already, so there must exist a transaction $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ inserted by $\mathcal{A}$.
+Each $\text{tx}_{\text{spend}}$ generated by a non-$\func{Insert}$ oracle query satisfies this condition already, so there must exist a transaction $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ inserted by $\mathcal{A}$.
 
-Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin; that is, reveal the same partial opening $(s,r,-)$ of coin serial number commitments.
-Validity of the modified Chaum-Pedersen proofs $(\Pi_{\text{chaum}})_{u_1}$ and $(\Pi_{\text{chaum}})_{u_2}$ for these inputs gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
+Suppose there exist inputs $u_1,u_2 \in [0,w)$ of $\text{tx}_{\text{spend}}$ that consume the same coin with serial commitment $S$.
+Validity of the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ gives extracted openings $S_{u_1}' = s_{u_1} F + r_{u_1} G + y_{u_1} H$ and $S_{u_2}' = s_{u_2} F + r_{u_2} G + y_{u_2} H$ and tag representations such that $U = s_{u_1} T_{u_1} + r_{u_1} G$ and $U = s_{u_2} T_{u_2} + r_{u_2} G$.
 Because transaction validity implies $T_{u_1} \neq T_{u_2}$, we must have $(s_{u_1},r_{u_1}) \neq (s_{u_2},r_{u_2})$.
-Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to input set group elements $S_1$ and $S_2$) and discrete logarithm extractions such that $S_1 - S_{u_1}' = x_{u_1} H$ and $S_2 - S_{u_2}' = x_{u_2} H$.
+Validity of the corresponding parallel one-out-of-many proofs $(\Pi_{\text{par}})_{u_1}$ and $(\Pi_{\text{par}})_{u_2}$ yields indices (corresponding to the same input set group element $S$) and discrete logarithm extractions such that $S - S_{u_1}' = x_{u_1} H$ and $S - S_{u_2}' = x_{u_2} H$.
 This means
-$$S_1 = \dcom(s_{u_1},r_{u_1},x_{u_1}+y_{u_1})$$
-and
-$$S_2 = \dcom(s_{u_2},r_{u_2},x_{u_2}+y_{u_2})$$
-which contradicts the assumption of unique partial openings for consumed coin serial number commitments.
+$$S = \comm(s_{u_1},r_{u_1},x_{u_1}+y_{u_1}) = \comm(s_{u_2},r_{u_2},x_{u_2}+y_{u_2}),$$
+a contradiction since the commitment scheme is computationally binding.
 
 The second possibility for violation of the condition is that the transaction $\text{tx}_{\text{spend}}$ consumes a coin that is not generated in any previous valid transaction.
-Validity of the modified Chaum-Pedersen proof for such an input gives a tag representation $U = sT + rG$ and serial number commitment offset $S' = sF + rG + yH$.
-Validity of the parallel one-out-of-many proof for the input gives an index $l$ such that $S_l - S' = xH$, meaning $S_l = sF + rG + (x + y)H$ is an opening of this commitment.
-Because transaction validity requires all input ambiguity set elements to be produced in previous valid transactions as valid commitments, the adversary knows an opening of such a commitment, which is a contradiction.
+This follows immediately using similar reasoning as above, since transaction validity asserts knowledge of an opening to a commitment contained in the input set, all of which must have been previously generated in valid transactions by definition.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:multiple}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:multiple} is non-negligible.
-This means the augmented ledger $(L, \vec{a})$ contains two valid \text{Spend} transactions consuming the same coin but producing distinct tags.
+This means the augmented ledger $(L, \vec{a})$ contains two valid spend transactions consuming the same coin but producing distinct tags.
 Similarly to the previous argument, this implies distinct openings of the coin serial number commitment, which is a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:value}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:value} is non-negligible.
 Let $C$ be the value commitment of the coin consumed by an input of $\text{tx}_{\text{spend}}$ and generated in a previous transaction (of either type) in $(L, \vec{a})$.
-Since the generating transaction is valid, we have an extracted opening $C = vG + aH$ from either the balance proof (in a \text{Mint} transasction) or the range proof (in a \text{Spend} transaction).
+Since the generating transaction is valid, we have an extracted opening $C = vG + aH$ from either the balance proof (in a mint transasction) or the range proof (in a spend transaction).
 Validity of the corresponding parallel one-out-of-many proof in $\text{tx}_{\text{spend}}$ gives an extracted discrete logarithm $C - C' = xH$, where $C'$ is the input's value commitment offset.
 But this immediately gives $C' = vG + (a - x)H$, a contradiction since the commitment scheme is binding.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:balance}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:balance} is non-negligible.
-If the augmented ledger $(L, \vec{a})$ contains a \text{Spend} transaction that violates the balance equation, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, which is a contradiction.
-If instead the augmented ledger $(L, \vec{a})$ contains a \text{Mint} transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, again a contradiction.
+If the augmented ledger $(L, \vec{a})$ contains a spend transaction that violates the balance equation, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, which is a contradiction.
+If instead the augmented ledger $(L, \vec{a})$ contains a mint transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, again a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:honest}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:honest} is non-negligible.
-That is, $\mathcal{A}$ produces a \text{Spend} transaction $\text{tx}_{\text{spend}}$ by an \text{Insert} question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_1, Q_2) \in \text{ADDR}$.
+That is, $\mathcal{A}$ produces a spend transaction $\text{tx}_{\text{spend}}$ by an $\func{Insert}$ question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(Q_0, Q_1, Q_2) \in \func{ADDR}$.
 
-Validity of the Chaum-Pedersen proof corresponding to this input of $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
+Validity of the Chaum-Pedersen proof corresponding to $\text{tx}_{\text{spend}}$ yields an extracted representation $S' = s'F + r'G + yH$.
 Validity of the corresponding parallel one-of-many proof gives a serial number commitment $S$ and extraction such that $S - S' = xH$, so $S = s'F + r'G + (x + y)H$.
 
-Now let $(s_1,s_2,r)$ be the secret key corresponding to the address $(Q_1,Q_2)$.
+Now let $(s_1,s_2,r)$ be the spend key corresponding to the address $(Q_0,Q_1,Q_2)$.
 Since $\text{tx}_{\text{spend}}$ consumes a coin recoverable by this address, a serial number commitment for the recovered coin is
 \begin{align*}
-\overline{S} &= \hash_{\text{ser}}(s_1 K, Q_1, Q_2)F + Q_2 \\
-&= (\hash_{\text{ser}}(s_1 K, Q_1, Q_2) + s_2)F + rG
+\overline{S} &= \hash_{\text{ser}}(s_1 K)F + Q_2 \\
+&= (\hash_{\text{ser}}(s_1 K) + \hash_{Q_2}(s_1,i) + s_2)F + rG
 \end{align*}
-for recovery key $K$.
+for recovery key $K$ and some diversifier index $i$.
 
 Since the commitment scheme is binding, we must therefore have $r' = r$, which is a contradiction since $\mathcal{A}$ cannot extract this discrete logarithm from the public address.
 
@@ -822,20 +1054,20 @@ This completes the proof.
 
 This property requires that no bounded adversary can substantively alter a valid transaction. 
 In particular, non-malleability prevents malicious adversaries from modifying honest users' transactions by altering data or redirecting the outputs of a valid transaction before the transaction is added to the ledger.
-Since non-malleability of \text{Mint} transactions is offloaded to authorizations relating to consensus rules or base-layer operations, we need only consider the case of \text{Spend} transactions.
+Since non-malleability of mint transactions is offloaded to authorizations relating to consensus rules or base-layer operations, we need only consider the case of spend transactions.
 
-This property is formalized by an experiment \textbf{TR-NM}, in which a bounded adversary $\mathcal{A}$ adaptively interacts with the oracle $\mathcal{O}^{\text{DAP}}$, and then outputs a spend transaction $\text{tx}'$.
-If we let $T$ denote the set of all transactions produced by \text{Spend} queries to $\mathcal{O}^{\text{DAP}}$, and $L$ denote the final ledger, $\mathcal{A}$ wins the game if there exists $\text{tx} \in T$ such that:
+This property is formalized by an experiment $\func{TRNM}$, in which a bounded adversary $\mathcal{A}$ adaptively interacts with the oracle $\mathcal{O}^{\text{DAP}}$, and then outputs a spend transaction $\text{tx}'$.
+If we let $T$ denote the set of all transactions produced by $\func{Spend}$ queries to $\mathcal{O}^{\text{DAP}}$, and $L$ denote the final ledger, $\mathcal{A}$ wins the game if there exists $\text{tx} \in T$ such that:
 \begin{itemize}
     \item $\text{tx}' \neq \text{tx}$; 
     \item $\text{tx}'$ reveals a tag also revealed by $\text{tx}$; and
     \item both $\text{tx}'$ and $\text{tx}$ are valid transactions with respect to the ledger $L^{\prime}$ containing all transactions preceding $\text{tx}$ on $L$.
 \end{itemize}
 
-We say a DAP scheme $\Pi$ is \textbf{TR-NM}-secure if the adversary $\mathcal{A}$ wins the game \textbf{TR-NM} only with negligible probability:
-$$\text{Pr}[\text{\textbf{TR-NM}}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
+We say a DAP scheme $\Pi$ is $\func{TRNM}$-secure if the adversary $\mathcal{A}$ wins the game $\func{TRNM}$ only with negligible probability:
+$$\text{Pr}[\func{TRNM}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
 
-Let $\mathcal{T}$ be the set of all $\text{tx}_{\text{spend}}$ transactions generated by the $\mathcal{O}^{DAP}$ in response to $\text{Spend}$ queries.
+Let $\mathcal{T}$ be the set of all $\text{tx}_{\text{spend}}$ transactions generated by the $\mathcal{O}^{DAP}$ in response to $\func{Spend}$ queries.
 Since these transactions are generated by these oracle queries, $\mathcal{A}$ does not learn any secret data used to produce these transactions.
 
 \begin{proof}
@@ -843,7 +1075,7 @@ Assume that the adversary $\mathcal{A}$ wins the game with non-negligible probab
 That is, $\mathcal{A}$ produces a transaction $\text{tx}'$ revealing a tag $T$ also revealed in a transaction $\text{tx}$.
 Without loss of generality, assume each transaction consumes a single coin.
 
-Observe that a valid \text{Spend} binds all transaction elements except for modified Chaum-Pedersen proofs into each such proof via $\hash_{\text{bind}}$ and the proof transcripts.
+Observe that a valid spend binds all transaction elements except for the modified Chaum-Pedersen proof into each such proof via $\hash_{\text{bind}}$ and the proof transcripts.
 Therefore, in order to produce valid $\text{tx}' \neq \text{tx}$, we consider two cases:
 \begin{itemize}
     \item the modified Chaum-Pedersen proofs are identical, but $\text{tx}'$ and $\text{tx}$ differ in another element of the transaction structures; or
@@ -853,10 +1085,10 @@ Therefore, in order to produce valid $\text{tx}' \neq \text{tx}$, we consider tw
 In the first case, at least one input to the binding hash $\hash_{\text{bind}}$ used to initialize the modified Chaum-Pedersen transcripts must differ between the proofs.
 Because we model this hash function as a random oracle, the outputs differ except with negligible probability, a contradiction since the resulting proof structures must be identical.
 
-In the second case, suppose that the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}'$ contained in $\text{tx}'$ yields extraction $(s',r',y')$, and that the proof $\Pi_{\text{chaum}}$ contained in $\text{tx}$ yields $(s,r,y)$.
-Since the corresponding tags are identical, we must have $s' = s$ and $r' = r$.
-Any serial number commitment $S$ with a partial opening $(s,r,-)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component of the controlling public address $(Q_1,Q_2)$.
-Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or the $(Q_1,Q_2)$, which implies a non-negligible discrete logarithm advantage, a contradiction.
+In the second case, because the tag revealed in both $\text{tx'}$ and $\text{tx}$ is identical, Lemma \ref{lem:extract} gives extractions of the form $(s,r,y)$ and $(s,r,0)$ respectively.
+Further, the coin $S = \comm(s,r,0)$ consumed in $\text{tx}$ was generated such that $r$ is a spend key component for an address $(Q_0,Q_1,Q_2)$ not controlled by $\mathcal{A}$.
+Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without extracting from $S$ or from any set of corresponding diversified address components $\{Q_{2,i}\}_i$ produced from the same spend key.
+However, each $Q_{2,i}$ is produced linearly against $Q_2$ and querying $\hash_{Q_2}$ with unique $(s_1,i)$ input, a contradiction.
 \end{proof}
 
 
@@ -864,114 +1096,248 @@ Since $\mathcal{A}$ does not control this address, it cannot produce $r$ without
 
 This property implies that no bounded adversary $\mathcal{A}$ received any information from the ledger except what is already publicly revealed, even if it can influence valid ledger operations by honest users.
 
-Ledger indistinguishability is formalized through an experiment \textbf{L-IND} between a bounded adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, which terminates with a binary output $b^{\prime}$ by $\mathcal{A}$.
-At the beginning of the experiment, $\mathcal{C}$ samples $\text{Setup}(1^\lambda) \to pp$ and sends the parameters to $\mathcal{A}$; next it samples a random bit $b \in \lbrace 0,1 \rbrace$ and initializes two separate DAP oracles $\mathcal{O}_0^{DAP}$ and $\mathcal{O}_1^{DAP}$, each with its own separate ledger and internal state.
+Ledger indistinguishability is formalized through an experiment $\func{LIND}$ between a bounded adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, which terminates with a binary output $b^{\prime}$ by $\mathcal{A}$.
+At the beginning of the experiment, $\mathcal{C}$ samples $\func{Setup}(1^\lambda) \to pp$ and sends the parameters to $\mathcal{A}$; next it samples a random bit $b \in \lbrace 0,1 \rbrace$ and initializes two separate DAP oracles $\mathcal{O}_0^{DAP}$ and $\mathcal{O}_1^{DAP}$, each with its own separate ledger and internal state.
 At each consecutive step of the experiment:
 \begin{enumerate}
 \item $\mathcal{C}$ provides $\mathcal{A}$ two ledgers $(L_{\text{left}} = L_b, L_{\text{right}} = L_{1-b})$ where $L_b$ and $L_{1-b}$ are the current ledgers of the oracles $\mathcal{O}_b^{DAP}$ and $\mathcal{O}_{1-b}^{DAP}$ respectively. 
-\item $\mathcal{A}$ sends to $\mathcal{C}$ two queries $Q, Q^{\prime}$ of the same type (one of \text{CreateAddress}, \text{Mint}, \text{Spend}, \text{Recover}, or \text{Insert}). 
+\item $\mathcal{A}$ sends to $\mathcal{C}$ two queries $Q, Q^{\prime}$ of the same type (one of $\func{CreateAddress}$, $\func{Mint}$, $\func{Spend}$, $\func{Recover}$, or $\func{Insert}$). 
 \begin{itemize}
-    \item If the query type is \text{Insert} or \text{Mint}, $\mathcal{C}$ forwards $Q$ to $L_{b}$ and $Q^\prime$ to $L_{1-b}$, permitting $\mathcal{A}$ to insert its own transactions or mint new coins to $L_{\text{left}}$ and $L_{\text{right}}$.
-    \item For all queries of type \text{CreateAddress}, \text{Spend}, or \text{Recover}, $\mathcal{C}$ first checks if the two queries $Q$ and $Q^\prime$ are publicly consistent, and then forwards $Q$ to $\mathcal{O}_0^{DAP}$ and $Q^\prime$ to $\mathcal{O}_1^{DAP}$.
+    \item If the query type is $\func{Insert}$ or $\func{Mint}$, $\mathcal{C}$ forwards $Q$ to $L_{b}$ and $Q^\prime$ to $L_{1-b}$, permitting $\mathcal{A}$ to insert its own transactions or mint new coins to $L_{\text{left}}$ and $L_{\text{right}}$.
+    \item For all queries of type $\func{CreateAddress}$, $\func{Spend}$, or $\func{Recover}$, $\mathcal{C}$ first checks if the two queries $Q$ and $Q^\prime$ are publicly consistent, and then forwards $Q$ to $\mathcal{O}_0^{DAP}$ and $Q^\prime$ to $\mathcal{O}_1^{DAP}$.
     It receives the two oracle answers $(a_0,a_1)$, but returns $(a_b,a_{1-b})$ to $\mathcal{A}$.
 \end{itemize}
 \end{enumerate}
-As the adversary does not know the bit $b$ and the mapping between $(L_{\text{left}}, L_{\text{right}})$ and $(L_0, L_1)$, it cannot learn weather it affects the behavior of honest parties on $(L_0, L_1)$ or on $(L_1, L_0)$.
+As the adversary does not know the bit $b$ and the mapping between $(L_{\text{left}}, L_{\text{right}})$ and $(L_0, L_1)$, it cannot learn whether it affects the behavior of honest parties on $(L_0, L_1)$ or on $(L_1, L_0)$.
 At the end of the experiment, $\mathcal{A}$ sends $\mathcal{C}$ a bit $b^\prime \in \lbrace 0,1 \rbrace$.
 The challenger outputs $\mathcal{C}$ outputs 1 if $b = b^\prime$, and 0 otherwise.
 
-We require the queries $Q$ and $Q^\prime$ be publicly consistent as follows: if the query type of $Q$ and $Q^\prime$ is \text{Recover}, they are publicly consistent by construction.
-If the query type of $Q$ and $Q^\prime$ is \text{CreateAddress}, both oracles generate the same address.
-If the query type of $Q$ and $Q^\prime$ is \text{Mint}, the minted values of both queries must be equal.
-If the query type of $Q$ and $Q^\prime$ is \text{Spend}, then:
+We require the queries $Q$ and $Q^\prime$ be publicly consistent as follows: if the query type of $Q$ and $Q^\prime$ is $\func{Recover}$, they are publicly consistent by construction.
+If the query type of $Q$ and $Q^\prime$ is $\func{CreateAddress}$, both oracles generate the same address.
+If the query type of $Q$ and $Q^\prime$ is $\func{Mint}$, the minted values of both queries must be equal.
+If the query type of $Q$ and $Q^\prime$ is $\func{Spend}$, then:
 \begin{itemize}
     \item Both $Q$ and $Q^\prime$ must be well-formed and valid, so the referenced input coins must have been generated in a previous transaction on the ledger and be unspent.
     Further, the transaction must balance.
     \item The number of spent coins and output coins must be the same in $Q$ and $Q^\prime$.
-    \item If a consumed coin in $Q$ references a coin in $L_0$ posted by $\mathcal{A}$ through an \text{Insert} query, then the corresponding index in $Q^\prime$ must also reference a coin in $L_1$ posted by $\mathcal{A}$ through an \text{Insert} query and the values of these two coins must be equal as well (and vice versa for $Q^\prime$). 
-    \item If an output coin referenced by $Q$ does not reference a recipient address in the oracle \text{ADDR} list (and therefore is controlled by $\mathcal{A}$), then the corresponding value must equal that of the corresponding coin referenced by $Q$ at the same index (and vice versa for $Q^\prime$).
+    \item If a consumed coin in $Q$ references a coin in $L_0$ posted by $\mathcal{A}$ through an $\func{Insert}$ query, then the corresponding index in $Q^\prime$ must also reference a coin in $L_1$ posted by $\mathcal{A}$ through an $\func{Insert}$ query and the values of these two coins must be equal as well (and vice versa for $Q^\prime$). 
+    \item If an output coin referenced by $Q$ does not reference a recipient address in the oracle $\func{ADDR}$ list (and therefore is controlled by $\mathcal{A}$), then the corresponding value must equal that of the corresponding coin referenced by $Q$ at the same index (and vice versa for $Q^\prime$).
 \end{itemize}
 
-We say a DAP scheme $\Pi$ is $\textbf{L-IND}$-secure if $\mathcal{A}$ wins the game \textbf{L-IND} only probability at most negligibly better than chance:
-$$\text{Pr}[\text{\textbf{L-IND}}(\Pi, \mathcal{A}, \lambda) = 1] - \frac{1}{2} \leq \text{negl}(\lambda)$$
+We say a DAP scheme $\Pi$ is $\func{LIND}$-secure if $\mathcal{A}$ wins the game $\func{LIND}$ only probability at most negligibly better than chance:
+$$\text{Pr}[\func{LIND}(\Pi, \mathcal{A}, \lambda) = 1] - \frac{1}{2} \leq \text{negl}(\lambda)$$
 
 \begin{proof}
-In order to prove that $\mathcal{A}$'s advantage in the \textbf{L-IND} experiment is negligible, we first consider a simulation experiment $\mathcal{D}^{\text{sim}}$, in which $\mathcal{A}$ interacts with $\mathcal{C}$ as in the L-IND experiment, but with modifications.
+In order to prove that $\mathcal{A}$'s advantage in the $\func{LIND}$ experiment is negligible, we first consider a simulation experiment $\mathcal{D}^{\text{sim}}$, in which $\mathcal{A}$ interacts with $\mathcal{C}$ as in the $\func{LIND}$ experiment, but with modifications.
 
 \textbf{The simulation experiment $\mathcal{D}^{\text{sim}}$}: Since the parallel one-out-of-many, modified Chaum-Pedersen, representation, and range proving systems are all special honest-verifier zero knowledge, we can take advantage of the simulator for each.
 Given input statements and verifier challenges, each proving system's simulator produces transcripts indistinguishable from honest proofs.
 Additionally, we now define the behavior of the full simulator.
 
 \textbf{The simulation.} The simulation $\mathcal{D}^{\text{sim}}$ works as follows.
-As in the original experiment, $\mathcal{C}$ samples the system parameters $\text{Setup}(1^\lambda) \to pp$ and a random bit $b$, and initializes DAP oracles $\mathcal{O}^{\text{DAP}}_0$ and $\mathcal{O}^{\text{DAP}}_1$.
+As in the original experiment, $\mathcal{C}$ samples the system parameters $\func{Setup}(1^\lambda) \to pp$ and a random bit $b$, and initializes DAP oracles $\mathcal{O}^{\text{DAP}}_0$ and $\mathcal{O}^{\text{DAP}}_1$.
 Then $\mathcal{D}^{\text{sim}}$ proceeds in steps.
 At each step, it provides $\mathcal{A}$ with ledgers $L_{\text{\text{left}}} = L_{b}$ and $L_{\text{\text{right}}} = L_{1-b}$,after which $\mathcal{A}$ sends two publicly-consistent queries $(Q, Q^\prime)$ of the same type.
 Recall that the queries $Q$ and $Q^\prime$ are consistent with respect to public data and information related to the addresses controlled by $\mathcal{A}$.
 Depending on the query type, the challenger acts as follows:
 \begin{itemize}
-    \item Answering \text{Recover} and \text{Insert} queries: The challenger proceeds as in the original \textbf{L-IND} experiment.
-    \item Answering \text{CreateAddress} queries: In this case the challenger replaces the public address components $Q_1$ and $Q_2$ with random strings of the appropriate lengths, producing $\text{addr}_{pk}$ that is returned to $\mathcal{A}$.
-    \item Answering \text{Mint} queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately:
+    \item Answering $\func{Recover}$ and $\func{Insert}$ queries: The challenger proceeds as in the original $\func{LIND}$ experiment.
+    \item Answering $\func{CreateAddress}$ queries: In this case the challenger replaces the public address components $(Q_0,Q_1,Q_2)$ with random strings of the appropriate lengths, producing $\addr_{pk}$ that is returned to $\mathcal{A}$.
+    \item Answering $\func{Mint}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately:
     \begin{enumerate}
-        \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using \text{CreateCoin} as usual.
+        \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using $\func{CreateCoin}$ as usual.
         \item Otherwise, it simulates coin generation:
         \begin{enumerate}
             \item Samples a recovery key $K$ uniformly at random.
+            \item Simulates the representation proof $\Pi_{\text{rec}}$ on a random input value.
             \item Samples a serial number commitment $S$ uniformly at random.
             \item Samples a value commitment $C$ uniformly at random.
-            \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
-            \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}.$$
+            \item Samples a random input used to produce a symmetric encryption key $\func{AEADKeyGen} \to k_{\text{enc}}$.
+            \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\func{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}.$$
         \end{enumerate}
         \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $(C - \com(v,0))$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
     \end{enumerate}
-    \item Answering \text{Spend} queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $w$ is the number of consumed coins and $t$ the number of generated coins specified by $\mathcal{A}$ as part of its queries:
+    \item Answering $\func{Spend}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $w$ is the number of consumed coins and $t$ the number of generated coins specified by $\mathcal{A}$ as part of its queries:
     \begin{enumerate}
-        \item Parse the input cover set serial number commitments and value commitments as $\text{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
-        \item For each $u \in [0,w)$, where $l_u$ represents the index of the consumed coin in $\text{InCoins}$:
+        \item Parse the input cover set serial number commitments and value commitments as $\func{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
+        \item For each $u \in [0,w)$, where $l_u$ represents the index of the consumed coin in $\func{InCoins}$:
         \begin{enumerate}
             \item Samples a tag $T_u$ uniformly at random.
             \item Samples a serial number commitment offset $S_u'$ and value commitment offset $C_u'$ uniformly at random.
-            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_i - S_u', C_i - C_u'\}_{i=0}^{N-1})$.
+            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_i, C_i\}_{i=0}^{N-1},S_u',C_u')$.
         \end{enumerate}
         \item For each $j \in [0,t)$:
         \begin{enumerate}
-            \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using \text{CreateCoin} as usual.
+            \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using $\func{CreateCoin}$ as usual.
             \item Otherwise, it simulates coin generation:
             \begin{enumerate}
                 \item Samples a recovery key $K_j$ uniformly at random.
+                \item Simulates the representation proof $\Pi_{\text{rec}}$ on a random input value.
                 \item Samples a serial number commitment $S_j$ uniformly at random.
                 \item Samples a value commitment $\overline{C}_j$ uniformly at random.
-                \item Samples a random input used to produce a symmetric encryption key $\text{AEADKeyGen} \to k_{\text{enc}}$.
-                \item Simulates the value encryption by selecting random $\widetilde{v}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{val},\widetilde{v}) \to \overline{v}_j.$$
-                \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\text{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}_j.$$
+                \item Samples a random input used to produce a symmetric encryption key $\func{AEADKeyGen} \to k_{\text{enc}}$.
+                \item Simulates the value encryption by selecting random $\widetilde{v}$ of the proper length, and encrypting it to produce $$\func{AEADEncrypt}(k_{\text{enc}},\texttt{val},\widetilde{v}) \to \overline{v}_j.$$
+                \item Simulates the memo encryption by selecting random $\widetilde{m}$ of the proper length, and encrypting it to produce $$\func{AEADEncrypt}(k_{\text{enc}},\texttt{memo},\widetilde{m}) \to \overline{m}_j.$$
                 \item Simulates a range proof $(\Pi_{\text{rp}})_j$ on the statement $(\overline{C}_j)$.
             \end{enumerate}
         \end{enumerate}
         \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $$\left(\sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0)\right).$$
-        \item For each $u \in [0,w)$, computes the binding hash $\mu$ as defined and simulates a modified Chaum-Pedersen proof $(\Pi_{\text{chaum}})_u$ on the statement $(S_u', T_u)$.
+        \item For each $u \in [0,w)$, computes the binding hash $\mu$ as defined and simulates the modified Chaum-Pedersen proof $\Pi_{\text{chaum}}$ on the statement $(\{S_u', T_u\}_{u=0}^{w-1})$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
     \end{enumerate}
 \end{itemize}
 
-For experiments defined below, we define $\text{Adv}^{\mathcal{D}}$ as the advantage of $\mathcal{A}$ in some experiment $\mathcal{D}$ over the original $\textbf{L-IND}$ game.
-By definition, all answers sent to $\mathcal{A}$ in $\mathcal{D}^{\text{sim}}$ are computed independently of the bit $b$, so $\text{Adv}^{\mathcal{D}^{\text{sim}}} = 0$. We will prove that $\mathcal{A}$'s advantage in the real L-IND experiment $\mathcal{D}^{\text{real}}$ is at most negligibly different than $\mathcal{A}$'s advantage in $\mathcal{D}^{\text{sim}}$.
+For experiments defined below, we define $\func{Adv}^{\mathcal{D}}$ as the advantage of $\mathcal{A}$ in some experiment $\mathcal{D}$ over the original $\func{LIND}$ game.
+By definition, all answers sent to $\mathcal{A}$ in $\mathcal{D}^{\text{sim}}$ are computed independently of the bit $b$, so $\func{Adv}^{\mathcal{D}^{\text{sim}}} = 0$. We will prove that $\mathcal{A}$'s advantage in the real experiment $\mathcal{D}^{\text{real}}$ is at most negligibly different than $\mathcal{A}$'s advantage in $\mathcal{D}^{\text{sim}}$.
 To show this, we construct intermediate experiments in which $\mathcal{C}$ performs a specific modification of $\mathcal{D}^{\text{real}}$ against $\mathcal{A}$.
 
-\textbf{Experiment $\mathcal{D}_1$}: This experiment modifies $\mathcal{D}^{\text{real}}$ by simulating all one-out-of-many proofs, range proofs, representation proofs, and modified Chaum-Pedersen proofs.
+\textbf{Experiment $\mathcal{D}_1$}: This experiment modifies $\mathcal{D}^{\text{real}}$ by simulating all one-out-of-many proofs, range proofs, representation proofs, and modified Chaum-Pedersen proof.
 As all these protocols are special honest-verifier zero knowledge, the simulated proofs are indistinguishable from the real proofs generated in $\mathcal{D}^{\text{real}}$.
-Hence $\text{Adv}^{\mathcal{D}_1} = 0$.
+Hence $\func{Adv}^{\mathcal{D}_1} = 0$.
 
 \textbf{Experiment $\mathcal{D}_2$}: This experiment modifies $\mathcal{D}_{1}$ by replacing all encrypted values and memos in transactions with challenger-generated recipient public addresses with encryptions of random values of appropriate lengths under keys chosen uniformly at random, and by replacing recovery keys with uniformly random values.
 Since the underlying authenticated symmetric encryption scheme is IND-CCA and IK-CCA secure and we assume the decisional Diffie-Hellman problem is hard, the adversarial advantage in distinguishing ledger output in the $\mathcal{D}_2$ experiment is negligibly different from its advantage in the $\mathcal{D}_{1}$ experiment.
-Hence $\lvert \text{Adv}^{\mathcal{D}_2} - \text{Adv}^{\mathcal{D}_1} \rvert$ is negligible.
+Hence $\lvert \func{Adv}^{\mathcal{D}_2} - \func{Adv}^{\mathcal{D}_1} \rvert$ is negligible.
 
 \textbf{Experiment $\mathcal{D}^{\text{sim}}$}: The $\mathcal{D}^{\text{sim}}$ experiment is formally defined above.
 In particular, it differs from $\mathcal{D}_{2}$ by replacing consumed coin tags, serial number commitment offset, and value commitment offsets with uniformly random values; and by replacing output coin serial number and value commitments with random values.
 In previous experiments (including $\mathcal{D}^{\text{real}}$), tags are generated using a pseudorandom function \cite{dodis}, and the other given values are generated as commitments with masks derived from hash functions modeled as independent random oracles, so the adversarial advantage in distinguishing ledger output in $\mathcal{D}^{\text{sim}}$ is negligibly different from its advantage in the $\mathcal{D}_2$ experiment.
-Hence $\lvert \text{Adv}^{\mathcal{D}^{\text{sim}}} - \text{Adv}^{\mathcal{D}_2} \rvert$ is negligible.
+Hence $\lvert \func{Adv}^{\mathcal{D}^{\text{sim}}} - \func{Adv}^{\mathcal{D}_2} \rvert$ is negligible.
 
-This shows that the adversary has only negligible advantage in the real $\textbf{L-IND}$ game over the simulation, where it can do no better than chance, which completes the proof.
+This shows that the adversary has only negligible advantage in the real $\func{LIND}$ game over the simulation, where it can do no better than chance, which completes the proof.
 \end{proof}
+
+
+\section{Payment Proofs}
+\label{app:payment}
+
+We describe now the informal security properties required for a payment proving system, describe such a construction, and (informally) prove that our construction meets the requirements.
+
+The security requirements of a payment proving system are as follows:
+\begin{enumerate}
+    \item\label{pay:context} The proof cannot be replayed in a different context.
+    \item\label{pay:secret} The prover asserts that it knows the secret data used to generate a specified coin.
+    \item\label{pay:value_memo} The verifier can obtain and confirm the value and memo associated to the coin.
+    \item\label{pay:identify} The holder of an incoming view key corresponding to a specified public address can successfully identify the coin.
+    \item\label{pay:malicious} A computationally-bound adversary cannot produce valid proofs for the same coin claiming distinct public addresses.
+\end{enumerate}
+
+
+\subsection{Parallel representation proving system}
+
+To prove knowledge of the secret information used to produce a coin in our payment proving system, we require a sigma protocol for a parallel discrete logarithm representation proving system with functions $\func{ParallelRepProve}$ and $\func{ParallelRepVerify}$ for the following relation, where $pp_{\text{comm}} = (\G,\F,F,G,H)$ are the double-masked Pedersen commitment public parameters used in the overall transaction protocol:
+$$\{pp_{\text{comm}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1 ; k : K = kQ_0, K_{\text{der}} = kQ_1, K_{\text{div}} = kF \}$$
+This construction can be easily built using a standard Schnorr-type proving system:
+
+\begin{enumerate}
+    \item The prover chooses $r \in \F$ uniformly at random.
+    \item The prover computes the initial proof values
+    \begin{align*}
+        A_1 &= rQ_0 \\
+        A_2 &= rQ_1 \\
+        A_3 &= rF
+    \end{align*}
+    and sends them to the verifier.
+    \item The verifier chooses a challenge $c \in \F$ uniformly at random, and sends it to the prover.
+    \item The prover computes the response $t = r + ck$ and sends it to the verifier.
+    \item The verifier accepts the proof if and only if the following hold:
+    \begin{align*}
+        A_1 + cK &= tQ_0 \\
+        A_2 + cK_{\text{der}} &= tQ_1 \\
+        A_3 + cK_{\text{div}} &= tF
+    \end{align*}
+\end{enumerate}
+
+This proving system can easily be shown to be complete, special honest-verifier zero knowledge, and special sound; we omit the proof here for brevity.
+
+
+\subsection{Payment proving system}
+
+To produce a payment proof on a given coin $\func{Coin}$ to the claimed destination address $(Q_0,Q_1,Q_2)$, the prover does the following:
+\begin{enumerate}
+    \item Parses the recovery key preimage, serial number commitment, value commitment, and recovery key from $\func{Coin}$: $(k,S,C,K)$
+    \item Generates a parallel representation proof:
+    $$\Pi_{\text{dl}} = \func{ParallelRepProve}(pp_{\text{comm}},K,kQ_0,kQ_1,kG,Q_0,Q_1 ; k)$$
+    When constructing this proof, the prover also binds $\func{Coin}$, $Q_2$, and any implementation-specific proof context.
+    \item Assembles the payment proof:
+    $$\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$$
+\end{enumerate}
+
+To verify a payment proof on a coin, the verifier does the following:
+\begin{enumerate}
+    \item Parses the payment proof: $\Pi_{\text{pay}} = (\func{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$
+    \item Parses public data from $\func{Coin}$: $(S,C,K,\Pi_{\text{rec}},\overline{v},\overline{m})$
+    \item Verifies the parallel representation proof, and aborts if verification fails:
+    $$\func{ParallelRepVerify}(pp_{\text{comm}},\Pi_{\text{dl}},K,K_{\text{der}},K_{\text{div}},Q_0,Q_1)$$
+    \item Verifies the diversifier representation proof, and aborts if verification fails:
+    $$\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{rec}},F,K_{\text{div}})$$
+    \item Checks that $S = \comm(\hash_{\text{ser}}(K_{\text{der}}),0,0) + Q_2$, and aborts otherwise.
+    \item Generates an AEAD key $k_{\text{aead}} = \func{AEADKeyGen}(K_{\text{der}})$ and decrypts the value and memo:
+    \begin{align*}
+        v &= \func{AEADDecrypt}(k_{\text{aead}},\texttt{val},\overline{v}) \\
+        m &= \func{AEADDecrypt}(k_{\text{aead}},\texttt{memo},\overline{m})
+    \end{align*}
+    If either decryption fails, aborts.
+    \item Checks that $C = \com(v, \hash_{\text{val}}(K_{\text{der}}))$, and aborts otherwise.
+\end{enumerate}
+
+
+\subsection{Security}
+
+We now describe why this construction meets our security requirements.
+
+\textbf{Requirement \ref{pay:context}}. To show that a payment proof cannot be replayed in another context, note that since proof context is bound to the transcript of $\Pi_{\text{dl}}$ along with the statement and coin data, the overall payment proof $\Pi_{\text{pay}}$ cannot be successfully replayed against any other context.
+
+\textbf{Requirement \ref{pay:secret}}. To show that successful verification of a payment proof asserts the prover knew the secret data used to produce the coin, observe that the special soundness of the parallel representation proving system for $\Pi_{\text{dl}}$ asserts that the prover knows a recovery key preimage $k \in \F$ for the coin; since $\G$ is cyclic, $k$ is unique for the given statement.
+
+\textbf{Requirement \ref{pay:value_memo}}. To show that the verifier can obtain the correct value and memo for the coin on successful verification of a payment proof, we simply note that successful AEAD decryption provides the unique values for the value and memo originally used to produce the coin, and that the decrypted value uniquely corresponds to the coin's value commitment since the commitment scheme is binding and successful verification implies an opening to this commitment.
+
+\textbf{Requirement \ref{pay:identify}}. We now show that the holder of the private view key $(s_1,P_1,P_2)$ corresponding to the address $(Q_0,Q_1,Q_2)$ can identify $\textsf{Coin}$ if a payment proof verifies.
+First note that successful verification shows the prover knows $k \in \F$ such that $K = kQ_0$ and $K_{\text{der}} = kQ_1$, so the following holds:
+\begin{align*}
+    S &= \hash_{\text{ser}}(K_{\text{der}})F + Q_2 \\
+    &= \hash_{\text{ser}}(kQ_1)F + Q_2 \\
+    &= \hash_{\text{ser}}(ks_1 Q_0)F + Q_2 \\
+    &= \hash_{\text{ser}}(s_1 K)F + Q_2
+\end{align*}
+Hence the view key holder will obtain a diversifier index when querying a diversifier lookup table produced with $(s_1,P_1,P_2)$ by construction.
+
+Verification of $\Pi_{\text{rec}}$ on the statement value $K_{\text{div}}$ asserts the following:
+\begin{align*}
+    K_{\text{div}} &= kF \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}k\hash_{Q_0}(s_1,i)F \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}kQ_0 \\
+    &= \frac{1}{\hash_{Q_0}(s_1,i)}K
+\end{align*}
+Hence the view key holder will verify $\Pi_{\text{rec}}$ using $(1/\hash_{Q_0}(s_1,i))K$ as its statement value.
+
+We have already shown that $K_{\text{der}} = s_1 K$, so successful AEAD decryption by the verifier using a key derived from this value implies the view key holder obtains the same successful decryption and value commitment check.
+Therefore coin identification succeeds.
+
+\textbf{Requirement \ref{pay:malicious}}. We now show that a computationally-bound adversary cannot produce valid proofs against the same coin for distinct public addresses.
+Suppose such an adversary produces for the same coin valid payment proofs
+$$\Pi_{\text{pay}} = (\mathsf{Coin},K_{\text{der}},K_{\text{div}},Q_0,Q_1,Q_2,\Pi_{\text{dl}})$$
+and
+$$\Pi_{\text{pay}}' = (\mathsf{Coin},K_{\text{der}}',K_{\text{div}}',Q_0',Q_1',Q_2',\Pi_{\text{dl}}')$$
+on addresses $(Q_0,Q_1,Q_2) \neq (Q_0',Q_1',Q_2')$.
+Note that $\mathsf{Coin} = (S,C,K,\Pi_{\text{rec}},\overline{v},\overline{m})$ must be identical in both proofs by definition.
+Since the parallel representation proving system is special sound, we can extract witnesses $k$ from $\Pi_{\text{dl}}$ and $k'$ from $\Pi_{\text{dl}}'$.
+
+Consider first the case where $k = k'$.
+In this case, $K = kQ_0 = k'Q_0'$ immediately yields $Q_0' = Q_0$.
+Since the AEAD keys derived from both proofs successfully decrypt $\overline{v}$ and $\overline{m}$, we must have $K_{\text{der}} = K_{\text{der}}'$ except with negligible probability where $K_{\text{der}} = kQ_1$ and $K_{\text{der}}' = k'Q_1'$, so $Q_1' = Q_1$.
+Finally, since
+\begin{align*}
+S &= \hash_{\text{ser}}(K_{\text{der}})F + Q_2 \\
+&= \hash_{\text{ser}}(K_{\text{der}}')F + Q_2'
+\end{align*}
+and $K_{\text{der}} = K_{\text{der}}'$, we must have $Q_2' = Q_2$.
+Hence $(Q_0,Q_1,Q_2) = (Q_0',Q_1',Q_2')$, a contradiction.
+
+Now consider the case where $k \neq k'$.
+Since $\Pi_{\text{rec}}$ verifies using both $K_{\text{div}}$ and $K_{\text{div}}'$ as statement values, these values must be equal except with negligible probability.
+However, $K_{\text{div}} = kF$ and $K_{\text{div}}' = k'F$ and $k \neq k'$, a contradiction.
+
 
 \end{document}
