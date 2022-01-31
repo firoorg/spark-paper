@@ -14,6 +14,7 @@
 \newcommand{\addr}{\func{addr}}
 \newcommand{\com}{\func{Com}}
 \newcommand{\comm}{\func{Comm}}
+\newcommand{\oracle}{\mathcal{O}^{\func{DAP}}}
 
 
 \begin{document}
@@ -137,15 +138,15 @@ We present an instantiation of such a proving system in Appendix \ref{app:parall
 \subsection{Authenticated Encryption Scheme}
 
 We require the use of an authenticated symmetric encryption with associated data (AEAD) scheme.
-In the context of the Spark protocol, this construction is used to encrypt value and arbitrary memo data for use by the sender and recipient of a transaction.
+In the context of the Spark protocol, this construction is used to encrypt value, memo, and other data for use by the recipient of a transaction.
 
 Let $pp_{\text{aead}}$ be the public parameters for such a construction.
 The construction itself is a tuple of algorithms $(\func{AEADKeyGen},\func{AEADEncrypt},\func{AEADDecrypt})$.
 Here $\func{AEADKeyGen}$ is a key derivation function that accepts as input an arbitrary string, and produces a key in the appropriate key space.
 The algorithm $\func{AEADEncrypt}$ accepts as input a key, associated data, and arbitrary message string, and produces ciphertext in the appropriate space.
-The algorithm $\func{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds.
+The algorithm $\func{AEADDecrypt}$ accepts as input a key, associated data, and ciphertext string, and produces a message in the appropriate space if authentication succeeds (and fails otherwise).
 
-Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA), indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2), and key-private under chosen-ciphertext attacks (IK-CCA) in this context \cite{keyprivacy}.
+Assume that such a construction is indistinguishable against adaptive chosen-ciphertext attacks (IND-CCA2) and key-private under chosen-ciphertext attacks (IK-CCA) in this context \cite{keyprivacy}.
 
 
 \subsection{Symmetric Encryption Scheme}
@@ -159,7 +160,7 @@ Here $\func{SymKeyGen}$ is a key derivation function that accepts as input an ar
 The algorithm $\func{SymEncrypt}$ accepts as input a key and arbitrary message string, and produces ciphertext in the appropriate space.
 The algorithm $\func{SymDecrypt}$ accepts as input a key and ciphertext string, and produces a message in the appropriate space.
 
-Assume that such a construction is indistinguishable against chosen-plaintext attack (IND-CPA) and indistinguishable against adaptive chosen-ciphertext attack (IND-CCA2) in this context.
+Assume that such a construction is indistinguishable against adaptive chosen-ciphertext attacks (IND-CCA2) in this context.
 
 
 \subsection{Range Proving System}
@@ -237,6 +238,7 @@ In this section we provide detailed description of the DAP scheme algorithms.
 \subsection{\texorpdfstring{$\func{Setup}$}{Setup}}
 
 This algorithm produces public parameters required for the protocol.
+The security parameter and resulting public parameters are assumed to be available to all other algorithms, even where not specifically noted.
 
 \textbf{Inputs:} Security parameter $\lambda$, size decomposition parameters $n > 1$ and $m > 1$, maximum value parameter $v_{\text{max}}$
 
@@ -495,13 +497,15 @@ If the input transaction is a spend transaction:
 
 \section{Multisignature Operations}
 
-Spark addresses and transactions support efficient and secure multisignature operations, where a group of signers are required to authorize transactions.
-We describe a method for signing groups to perform the $\func{CreateKeys}$ and $\func{Spend}$ algorithms to produce multisignature keys and spend transactions indistinguishable from others.
+It is often useful to permit transactions requiring multiple parties to authorize; the parties may be mututally untrusting, and it may not be sufficient to rely on a separate trusted third party.
+In this case, we require processes for distributed key and spend transaction generation that require either a set of specified parties or a threshold subset of a given size to complete.
+Specifically, we describe a method for such signing groups to perform the $\func{CreateKeys}$ and $\func{Spend}$ algorithms to produce keys and spend transactions indistinguishable from others.
 This method uses techniques from \cite{musig,schnorr,schnorrwithschnorr}.
 We defer a complete security analysis to future work.
 
-Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce an address, such that any threshold $1 \leq t \leq \nu$ of them can produce an authorizing proof.
-Sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
+Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce keys, and such that a specified threshold $1 \leq t \leq \nu$ of the players is required to produce an authorizing proof spending coins directed to any address associated to the keys.
+
+For the modified algorithms we present here, sample cryptographic hash functions $$\hash_{\text{pok}},\hash_{s_1},\hash_{s_2},\hash_{\rho},\hash_{F},\hash_{H}: \{0,1\}^* \to \F$$ uniformly at random.
 
 
 \subsection{\texorpdfstring{$\func{CreateKeys}$}{CreateKeys}}
@@ -517,7 +521,7 @@ To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the f
         \item Sets $c_\alpha = \hash_{\text{pok}}(\alpha,a_{\alpha,0}G,R_\alpha)$.
         \item Sets $\mu_\alpha = k_\alpha + a_{\alpha,0}c_\alpha$.
     \end{enumerate}
-    \item Produces a vector of commitments $C_\alpha = \{a_{\alpha,j}G\}_{j=0}^{t-1}$ to its coefficients.
+    \item Produces a vector of commitments $C_\alpha = \{C_{\alpha,j}\}_{j=0}^{t-1} = \{a_{\alpha,j}G\}_{j=0}^{t-1}$ to its coefficients.
     \item Sends the tuple $(R_\alpha,\mu_\alpha,C_\alpha,s_{1,\alpha},s_{2,\alpha})$ to all other players $1 \leq \beta \neq \alpha \leq \nu$.
     \item On receipt of a tuple $(R_\beta,\mu_\beta,C_\beta,s_{1,\beta},s_{2,\beta})$ from another player $\beta$:
     \begin{enumerate}
@@ -541,13 +545,15 @@ Since each player holds the aggregate incoming view key, it can compute public a
 
 The signing group can reduce the communication complexity of proof generation by precomputing and sharing sets of nonce data.
 Each future signing operation uses one such nonce set for each signing player, which cannot be reused.
-The signing group can precompute as many nonce sets as needed for expected signing operations, and can perform this operation as needed.
+The signing group can precompute as many nonce sets as needed for expected signing operations, and can perform this operation whenever additional nonce sets are required.
 In particular, the group may wish to do so during the key generation process, where the added communication round may be less impactful than during later proof generation.
 
 To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ engages in the following one-round process:
 \begin{enumerate}
-    \item Generates a vector $L_\alpha$, where for $0 \leq k < \pi$ it selects $d_{\alpha,k},e_{\alpha,k} \in \F$ uniformly at random, sets $L_{\alpha,k} = (d_{\alpha,k}G,e_{\alpha,k}G)$, and then sends $L_\alpha$ to all other players.
-    \item On receipt of a vector $L_\beta$ from another player $\beta$, checks that $d_{\beta,k}G \neq 0$ and $e_{\beta,k}G \neq 0$ for all $0 \leq k < \pi$, and aborts otherwise.
+    \item For $0 \leq k < \pi$, it selects $d_{\alpha,k}, e_{\alpha,k} \in \F$ uniformly at random and defines $D_{\alpha,k} = d_{\alpha,k}G$ and $E_{\alpha,k} = e_{\alpha,k}G$.
+    \item Generates a vector $L_\alpha$ such that for $0 \leq k < \pi$, we have $L_{\alpha,k} = (D_{\alpha,k}, E_{\alpha,k})$; that is, $L_{\alpha}$ contains $\pi$ nonce pairs.
+    \item Sends $L_\alpha$ to all other players.
+    \item On receipt of a vector $L_\beta$ from another player $\beta$, checks that $D_{\beta,k} \neq 0$ and $E_{\beta,k} \neq 0$ for all $0 \leq k < \pi$, and aborts otherwise.
 \end{enumerate}
 
 
@@ -555,7 +561,7 @@ To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ eng
 \subsection{\texorpdfstring{$\func{Spend}$}{Spend}}
 
 Because all players possess the aggregate full view key corresponding to public addresses, any player can use it to construct all transaction components except the modified Chaum-Pedersen proof.
-We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of a coin, with the following proof inputs (using our previous notation):
+We describe now how a threshold of $t$ signers collaboratively produce such a proof to authorize the spending of coins, with the following proof inputs (using our previous notation):
 $$\{pp_{\text{chaum}}, \{S_u', T_u\}_{u=0}^{w-1}; (\{s_u, r, -\hash_{\text{ser}'}(s_u, D)\}_{u=0}^{w-1})\}$$
 
 For the sake of notation convenience, we assume that the signing players are indexed $1 \leq \alpha \leq t$.
@@ -563,16 +569,16 @@ Further, assume that each nonce list $L_\alpha$ contains $k + 1 \geq w$ unused n
 We also assume the context binding value $\mu$ has been defined.
 Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-    \item Parses the next available set of nonces $\{(d_{\beta,k-u}G,e_{\beta,k-u}G)\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute the following values:
-    $$\rho_u = \hash_{\rho}(\{\beta,d_{\beta,k-u}G,e_{\beta,k-u}G\}_{\beta=1}^{t},\mu,S_u',T_u)$$
+    \item Parses the next available set of nonces $\{(D_{\beta,k-u},E_{\beta,k-u})\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute, for $0 \leq u < w$, the following:
+    $$\rho_u = \hash_{\rho}(\{\beta,D_{\beta,k-u},E_{\beta,k-u}\}_{\beta=1}^{t},\mu,S_u',T_u)$$
     \item Sets the initial proof commitments:
     \begin{align*}
-        A_1 &= \sum_{u=0}^{w-1} \left( \hash_F(\rho_u)F + \hash_H(\rho_u)H + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right) \\
-        \{A_{2,u}\}_{u=0}^{w-1} &= \left\{ \hash_F(\rho_u)T_u + \sum_{\beta=1}^t \left( d_{\beta,k-u}G + \rho e_{\beta,k-u}G \right) \right\}
+        A_1 &= \sum_{u=0}^{w-1} \left( \hash_F(\rho_u)F + \hash_H(\rho_u)H + \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho E_{\beta,k-u} \right) \right) \\
+        \{A_{2,u}\}_{u=0}^{w-1} &= \left\{ \hash_F(\rho_u)T_u + \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho E_{\beta,k-u} \right) \right\}
     \end{align*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\func{Spend}$ description.
     \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $$t_{2,\alpha} = \sum_{u=0}^{w-1} (d_{\alpha,k-u} + \rho_u e_{\alpha,k-u} + \lambda_\alpha r_\alpha c^u),$$ and sends $t_{2,\alpha}$ to the other signing players.
-    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( d_{\beta,k-u}G + \rho_u e_{\beta,k-u}G + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( D_{\beta,k-u} + \rho_u E_{\beta,k-u} + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
         \{t_{1,u}\}_{u=0}^{w-1} &= \{ \hash_F(\rho_u) + c^u s_u \} \\
@@ -779,16 +785,17 @@ The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVe
 
 Let $\delta(i,j): \mathbb{N}^2 \to \F$ be the Kronecker delta function.
 For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary decomposition of $k$.
+Let $\func{MatrixCom}: \F^{mn} \times \F \to \G$ be an additively-homomorphic matrix commitment construction that is perfectly hiding and computationally binding.
 
 The protocol proceeds as follows, where we use some of the notation of \cite{lelantus,triptych}:
 \begin{enumerate}
     \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
     \item The prover computes the following:
     \begin{align*}
-        A &\equiv \com(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
-        B &\equiv \com(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
-        C &\equiv \com(\lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
-        D &\equiv \com(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
+        A &\equiv \func{MatrixCom}(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
+        B &\equiv \func{MatrixCom}(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
+        C &\equiv \func{MatrixCom}(\lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
+        D &\equiv \func{MatrixCom}(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
     \end{align*}
     \item For each $j \in [0,m)$, the prover selects $\rho^S_j, \rho^V_j \in \F$ uniformly at random, and computes the following:
     \begin{align*}
@@ -808,8 +815,8 @@ The protocol proceeds as follows, where we use some of the notation of \cite{lel
     \item The prover sends $\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}, z_A, z_C, z_S, z_V$ to the verifier.
     \item For each $j \in [0,m)$, the verifier sets $f_{j,0} \equiv x - \sum_{i=1}^{n-1} f_{j,i}$ and accepts the proof if and only if
     \begin{align*}
-        A + xB &= \com(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, z_A) \\
-        xC + D &= \com(\lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z_C) \\
+        A + xB &= \func{MatrixCom}(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, z_A) \\
+        xC + D &= \func{MatrixCom}(\lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z_C) \\
     \end{align*}
     and
     \begin{align*}
@@ -848,15 +855,20 @@ For clarity, we prove that the protocol is special honest-verifier zero knowledg
 Zerocash \cite{zerocash} established a robust security framework for decentralized anonymous payment (DAP) scheme security that captures a realistic threat model with powerful adversaries who are permitted to add malicious coins into transactions' input ambiguity sets, control the choice of transaction inputs, and produce arbitrary transactions to add to a ledger.
 Here we formally prove Spark's security within a related (but modified) security model; proofs follow somewhat similarly to that of \cite{zerocash}.
 
-We recall the security definition for a DAP scheme $$\Pi = (\func{Setup}, \func{CreateAddress}, \func{Mint}, \func{Spend}, \func{Recover}, \func{Verify}),$$ which is secure if it satisfies definitions for ledger indistinguishability, transaction non-malleability, and balance security properties, which we define below.
+The DAP construction is a tuple of algorithms
+\begin{multline*}
+(\func{Setup}, \func{CreateKeys}, \func{CreateAddress}, \func{CreateCoin}, \\
+\func{Mint}, \func{Identify}, \func{Recover}, \func{Spend}, \func{Verify})
+\end{multline*}
+that is secure if it satisfies properties of completeness, balance, non-malleability, and ledger indistinguishability.
 
-Each security property is formalized as a game between a polynomial-time adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, where in each game the behavior of honest parties is simulated via an oracle $\mathcal{O}^{DAP}$.
-The oracle $\mathcal{O}^{DAP}$ maintains a ledger $L$ of transactions and provides an interface for executing $\func{CreateAddress}$, $\func{Mint}$, and $\func{Spend}$ algorithm operations for honest parties.
-To simulate behavior from honest parties, $\mathcal{A}$ passes a query to $\mathcal{C}$, which makes sanity checks and then proxies the queries to $\mathcal{O}^{DAP}$, returning the responses to $\mathcal{A}$ as needed.
-For $\func{CreateAddress}$ queries, $\mathcal{C}$ first runs the $\func{CreateKeys}$ protocol algorithm, then calls $\func{CreateAddress}$ using the resulting incoming view key and a randomly-selected diversifier index, and finally returns the public address $\addr_{\text{pk}}$ to $\mathcal{A}$.
-For $\func{Mint}$ queries, the adversary specifies the value and destination public address for the transaction, and the resulting transaction is produced and returned by $\mathcal{C}$ if valid.
-For $\func{Spend}$ queries, the adversary specifies the input coins to be consumed, as well as the values and destination public addresses for the transaction, and the resulting transaction is produced (after $\mathcal{C}$ recovers the consumed coins) and returned by $\mathcal{C}$ if valid.
-The oracle $\mathcal{O}^{DAP}$ also provides an $\func{Insert}$ query that allows the adversary to insert arbitrary and potentially malicious $\text{tx}_{\text{mint}}$ or $\text{tx}_{\text{spend}}$ transactions to the ledger $L$, provided they are valid.
+Each security property is formalized as a game between a polynomial-time adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, where in each game the behavior of honest parties is simulated via an oracle $\oracle$.
+The oracle $\oracle$ maintains a ledger $L$ of transactions and provides an interface for executing the $\func{CreateAddress}$, $\func{Mint}$, and $\func{Spend}$ algorithms.
+To simulate behavior from honest parties, $\mathcal{A}$ passes a query to $\mathcal{C}$, which makes sanity checks and then proxies the queries to $\oracle$, returning the responses to $\mathcal{A}$ as needed.
+For $\func{CreateAddress}$ queries, the oracle first runs the $\func{CreateKeys}$ protocol algorithm, then calls $\func{CreateAddress}$ using the resulting incoming view key and a randomly-selected diversifier index, and finally returns the public address $\addr_{\text{pk}}$.
+For $\func{Mint}$ queries, the adversary specifies the value, memo, and destination public address for the transaction, and the resulting transaction is produced and returned if the inputs are semantically valid.
+For $\func{Spend}$ queries, the adversary specifies the input coins to be consumed, as well as the values, memos, and destination public addresses for the transaction, and the resulting transaction is produced after coin recovery if the inputs are semantically valid, all consumed coins are validly controlled by an address produced by the oracle, and all consumed coins are unspent according to the ledger state.
+The oracle $\oracle$ also provides an $\func{Insert}$ query that allows the adversary to insert arbitrary and potentially malicious $\text{tx}_{\text{mint}}$ or $\text{tx}_{\text{spend}}$ transactions into the ledger $L$, provided they are semantically valid and pass verification by the oracle.
 
 For each security property, we say the DAP satisfies the property if the adversary can win the corresponding game with only negligible probability.
 
@@ -1006,8 +1018,8 @@ This property requires that no bounded adversary can substantively alter a valid
 In particular, non-malleability prevents malicious adversaries from modifying honest users' transactions by altering data or redirecting the outputs of a valid transaction before the transaction is added to the ledger.
 Since non-malleability of mint transactions is offloaded to authorizations relating to consensus rules or base-layer operations, we need only consider the case of spend transactions.
 
-This property is formalized by an experiment $\func{TRNM}$, in which a bounded adversary $\mathcal{A}$ adaptively interacts with the oracle $\mathcal{O}^{\text{DAP}}$, and then outputs a spend transaction $\text{tx}'$.
-If we let $T$ denote the set of all transactions produced by $\func{Spend}$ queries to $\mathcal{O}^{\text{DAP}}$, and $L$ denote the final ledger, $\mathcal{A}$ wins the game if there exists $\text{tx} \in T$ such that:
+This property is formalized by an experiment $\func{TRNM}$, in which a bounded adversary $\mathcal{A}$ adaptively interacts with the oracle $\oracle$, and then outputs a spend transaction $\text{tx}'$.
+If we let $T$ denote the set of all transactions produced by $\func{Spend}$ queries to $\oracle$, and $L$ denote the final ledger, $\mathcal{A}$ wins the game if there exists $\text{tx} \in T$ such that:
 \begin{itemize}
     \item $\text{tx}' \neq \text{tx}$; 
     \item $\text{tx}'$ reveals a tag also revealed by $\text{tx}$; and
@@ -1017,7 +1029,7 @@ If we let $T$ denote the set of all transactions produced by $\func{Spend}$ quer
 We say a DAP scheme $\Pi$ is $\func{TRNM}$-secure if the adversary $\mathcal{A}$ wins the game $\func{TRNM}$ only with negligible probability:
 $$\text{Pr}[\func{TRNM}(\Pi, \mathcal{A}, \lambda) = 1] \leq \text{negl}(\lambda)$$
 
-Let $\mathcal{T}$ be the set of all $\text{tx}_{\text{spend}}$ transactions generated by the $\mathcal{O}^{DAP}$ in response to $\func{Spend}$ queries.
+Let $\mathcal{T}$ be the set of all $\text{tx}_{\text{spend}}$ transactions generated by the $\oracle$ in response to $\func{Spend}$ queries.
 Since these transactions are generated by these oracle queries, $\mathcal{A}$ does not learn any secret data used to produce these transactions.
 
 \begin{proof}
@@ -1047,14 +1059,14 @@ However, each $Q_{2,i}$ is produced linearly against $Q_2$ and querying $\hash_{
 This property implies that no bounded adversary $\mathcal{A}$ received any information from the ledger except what is already publicly revealed, even if it can influence valid ledger operations by honest users.
 
 Ledger indistinguishability is formalized through an experiment $\func{LIND}$ between a bounded adversary $\mathcal{A}$ and a challenger $\mathcal{C}$, which terminates with a binary output $b^{\prime}$ by $\mathcal{A}$.
-At the beginning of the experiment, $\mathcal{C}$ samples $\func{Setup}(1^\lambda) \to pp$ and sends the parameters to $\mathcal{A}$; next it samples a random bit $b \in \lbrace 0,1 \rbrace$ and initializes two separate DAP oracles $\mathcal{O}_0^{DAP}$ and $\mathcal{O}_1^{DAP}$, each with its own separate ledger and internal state.
+At the beginning of the experiment, $\mathcal{C}$ samples $\func{Setup}(1^\lambda) \to pp$ and sends the parameters to $\mathcal{A}$; next it samples a random bit $b \in \lbrace 0,1 \rbrace$ and initializes two separate DAP oracles $\oracle_0$ and $\oracle_1$, each with its own separate ledger and internal state.
 At each consecutive step of the experiment:
 \begin{enumerate}
-\item $\mathcal{C}$ provides $\mathcal{A}$ two ledgers $(L_{\text{left}} = L_b, L_{\text{right}} = L_{1-b})$ where $L_b$ and $L_{1-b}$ are the current ledgers of the oracles $\mathcal{O}_b^{DAP}$ and $\mathcal{O}_{1-b}^{DAP}$ respectively. 
-\item $\mathcal{A}$ sends to $\mathcal{C}$ two queries $Q, Q^{\prime}$ of the same type (one of $\func{CreateAddress}$, $\func{Mint}$, $\func{Spend}$, $\func{Recover}$, or $\func{Insert}$). 
+\item $\mathcal{C}$ provides $\mathcal{A}$ two ledgers $(L_{\text{left}} = L_b, L_{\text{right}} = L_{1-b})$ where $L_b$ and $L_{1-b}$ are the current ledgers of the oracles $\oracle_b$ and $\oracle_{1-b}$ respectively. 
+\item $\mathcal{A}$ sends to $\mathcal{C}$ two queries $Q, Q^{\prime}$ of the same type (one of $\func{CreateAddress}$, $\func{Mint}$, $\func{Spend}$, or $\func{Insert}$). 
 \begin{itemize}
     \item If the query type is $\func{Insert}$ or $\func{Mint}$, $\mathcal{C}$ forwards $Q$ to $L_{b}$ and $Q^\prime$ to $L_{1-b}$, permitting $\mathcal{A}$ to insert its own transactions or mint new coins to $L_{\text{left}}$ and $L_{\text{right}}$.
-    \item For all queries of type $\func{CreateAddress}$, $\func{Spend}$, or $\func{Recover}$, $\mathcal{C}$ first checks if the two queries $Q$ and $Q^\prime$ are publicly consistent, and then forwards $Q$ to $\mathcal{O}_0^{DAP}$ and $Q^\prime$ to $\mathcal{O}_1^{DAP}$.
+    \item For all queries of type $\func{CreateAddress}$ or $\func{Spend}$, $\mathcal{C}$ first checks if the two queries $Q$ and $Q^\prime$ are publicly consistent, and then forwards $Q$ to $\oracle_0$ and $Q^\prime$ to $\oracle_1$.
     It receives the two oracle answers $(a_0,a_1)$, but returns $(a_b,a_{1-b})$ to $\mathcal{A}$.
 \end{itemize}
 \end{enumerate}
@@ -1062,7 +1074,7 @@ As the adversary does not know the bit $b$ and the mapping between $(L_{\text{le
 At the end of the experiment, $\mathcal{A}$ sends $\mathcal{C}$ a bit $b^\prime \in \lbrace 0,1 \rbrace$.
 The challenger outputs $\mathcal{C}$ outputs 1 if $b = b^\prime$, and 0 otherwise.
 
-We require the queries $Q$ and $Q^\prime$ be publicly consistent as follows: if the query type of $Q$ and $Q^\prime$ is $\func{Recover}$, they are publicly consistent by construction.
+We require the queries $Q$ and $Q^\prime$ be publicly consistent as follows
 If the query type of $Q$ and $Q^\prime$ is $\func{CreateAddress}$, both oracles generate the same address.
 If the query type of $Q$ and $Q^\prime$ is $\func{Mint}$, the minted values of both queries must be equal.
 If the query type of $Q$ and $Q^\prime$ is $\func{Spend}$, then:
@@ -1085,14 +1097,14 @@ Given input statements and verifier challenges, each proving system's simulator 
 Additionally, we now define the behavior of the full simulator.
 
 \textbf{The simulation.} The simulation $\mathcal{D}^{\text{sim}}$ works as follows.
-As in the original experiment, $\mathcal{C}$ samples the system parameters $\func{Setup}(1^\lambda) \to pp$ and a random bit $b$, and initializes DAP oracles $\mathcal{O}^{\text{DAP}}_0$ and $\mathcal{O}^{\text{DAP}}_1$.
+As in the original experiment, $\mathcal{C}$ samples the system parameters $\func{Setup}(1^\lambda) \to pp$ and a random bit $b$, and initializes DAP oracles $\oracle_0$ and $\oracle_1$.
 Then $\mathcal{D}^{\text{sim}}$ proceeds in steps.
 At each step, it provides $\mathcal{A}$ with ledgers $L_{\text{\text{left}}} = L_{b}$ and $L_{\text{\text{right}}} = L_{1-b}$,after which $\mathcal{A}$ sends two publicly-consistent queries $(Q, Q^\prime)$ of the same type.
 Recall that the queries $Q$ and $Q^\prime$ are consistent with respect to public data and information related to the addresses controlled by $\mathcal{A}$.
 Depending on the query type, the challenger acts as follows:
 \begin{itemize}
-    \item Answering $\func{Recover}$ and $\func{Insert}$ queries: The challenger proceeds as in the original $\func{LIND}$ experiment.
-    \item Answering $\func{CreateAddress}$ queries: In this case the challenger replaces the public address components $(d,Q_1,Q_2)$ with random strings of the appropriate lengths, producing $\addr_{pk}$ that is returned to $\mathcal{A}$.
+    \item Answering $\func{Insert}$ queries: The challenger proceeds as in the original $\func{LIND}$ experiment.
+    \item Answering $\func{CreateAddress}$ queries: In this case the challenger replaces the public address components $(d,Q_1,Q_2)$ with random strings of the appropriate lengths, producing $\addr_{\text{pk}}$ that is returned to $\mathcal{A}$.
     \item Answering $\func{Mint}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately:
     \begin{enumerate}
         \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using $\func{CreateCoin}$ as usual.
