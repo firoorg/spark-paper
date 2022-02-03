@@ -120,14 +120,14 @@ We present an instantiation of such a proving system in Appendix \ref{app:chaum}
 
 We require the use of a parallel one-out-of-many proving system that shows knowledge of openings of commitments to zero at the same index among two sets of group elements in zero knowledge.
 In the context of the Spark protocol, this will be used to mask consumed coin serial number and value commitments for balance, ownership, and double-spend purposes.
-We show how to produce such a proving system as a straightforward modification of a construction by Groth and Kohlweiss \cite{groth} that was generalized by Bootle \textit{et al.} \cite{bootle}.
+We show how to produce such a proving system as a straightforward modification of a construction by Groth and Kohlweiss \cite{groth} that was generalized by Bootle \textit{et al.} \cite{bootle}, with a further optimization from Esgin \textit{et al.} \cite{matrict}.
 
-Let $pp_{\text{par}} = (\G, \F, n, m, pp_{\text{com}})$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, $n > 1$ and $m > 1$ are integer-valued size decomposition parameters, and $pp_{\text{com}}$ are the public parameters for a Pedersen commitment (and matrix commitment) construction.
+Let $pp_{\text{par}} = (\G, \F, n, m, pp_{\text{com}}, pp_{\text{comm}})$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problem is hard, $\F$ is its scalar field, $n > 1$ and $m > 1$ are integer-valued size decomposition parameters, $pp_{\text{com}}$ are the public parameters for a Pedersen commitment construction, and $pp_{\text{comm}}$ are the public parameters for a double-masked Pedersen commitment construction.
 
 The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
 \left\{ pp_{\text{par}}, \{S_k,V_k\}_{k=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
+\left. 0 \leq l < N, S_l - S' = \comm(0,0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
 We require that the proving system be complete, special honest-verifier zero knowledge, and special sound.
@@ -255,7 +255,7 @@ In practice, these hash functions may be chosen using domain separation of a sin
 \item Compute the public parameters $pp_{\text{comm}} = (\G,\F,F,G,H)$ of a double-masked Pedersen commitment scheme.
 \item Compute the public parameters $pp_{\text{rep}} = (\G,\F)$ of a representation proving system.
 \item Compute the public parameters $pp_{\text{chaum}} = (\G,\F,F,G,H,U)$ of the modified Chaum-Pedersen proving system.
-\item Compute the public parameters $pp_{\text{par}} = (\G,\F,n,m,pp_{\text{com}})$ of the parallel one-out-of-many proving system.
+\item Compute the public parameters $pp_{\text{par}} = (\G,\F,n,m,pp_{\text{com}},pp_{\text{comm}})$ of the parallel one-out-of-many proving system.
 \item Compute the public parameters $pp_{\text{aead}}$ of an authenticated symmetric encryption scheme.
 \item Compute the public parameters $pp_{\text{sym}}$ of a symmetric encryption scheme.
 \item Compute the public parameters $pp_{\text{rp}} = (\G,\F,v_{\text{max}},pp_{\text{com}})$ of a range proving system.
@@ -645,7 +645,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \multicolumn{5}{|c|}{Input data ($w$ coins)} \\
         \hline
         $(S',C')$ & & $2w$ & & \\
-        $\Pi_{\text{par}}$ & this paper & $(2m + 4)w$ & $[m(n-1) + 4]w$ & \\
+        $\Pi_{\text{par}}$ & this paper & $(2m + 2)w$ & $[m(n-1) + 3]w$ & \\
         \hline
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
@@ -669,7 +669,7 @@ Table \ref{table:time} shows the verification batch complexity in terms of total
         \hline
         \textbf{Component} & \textbf{Complexity} \\
         \hline
-        Parallel one-out-of-many & $B[w(2m + 6) + 2m^m] + m^n + 1$ \\
+        Parallel one-out-of-many & $B[w(2m + 2) + 2n^m] + 2mn + 1$ \\
         Bulletproofs+ & $B(t + 2\lg(64t) + 3) + 128T + 2$ \\
         Modified Chaum-Pedersen & $B(3w + 1) + 4$ \\
         Schnorr & $B(w + t + 1) + 2$ \\
@@ -780,73 +780,129 @@ This completes the proof.
 The proving system itself is a tuple of algorithms $(\func{ParProve},\func{ParVerify})$ for the following relation, where we let $N = n^m$:
 \begin{multline*}
 \left\{ pp_{\text{par}}, \{S_k,V_k\}_{i=0}^{N-1} \subset \G^2, S',V' \in \G ; l \in \mathbb{N}, (s,v) \in \F : \right. \\
-\left. 0 \leq l < N, S_l - S' = \com(0,s), V_l - V' = \com(0,v) \right\}
+\left. 0 \leq l < N, S_l - S' = \comm(0,0,s), V_l - V' = \com(0,v) \right\}
 \end{multline*}
 
 Let $\delta(i,j): \mathbb{N}^2 \to \F$ be the Kronecker delta function.
-For $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ be the $j$ digit of the $n$-ary decomposition of $k$.
-Let $\func{MatrixCom}: \F^{mn} \times \F \to \G$ be an additively-homomorphic matrix commitment construction that is perfectly hiding and computationally binding.
+For any integers $k$ and $j$ such that $0 \leq k < N$ and $0 \leq j < m$, let $k_j$ denote the $j$ digit of the $n$-ary decomposition of $k$.
+Let $\func{MatrixCom}: \F^{mn} \times \F^{mn} \times \F \to \G$ be an additively-homomorphic matrix commitment construction that commits to the entries of two matrices, and is perfectly hiding and computationally binding.
 
 The protocol proceeds as follows, where we use some of the notation of \cite{lelantus,triptych}:
 \begin{enumerate}
-    \item The prover selects $$r_A, r_B, r_C, r_D, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
+    \item The prover selects $$r_A, r_B, \{a_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random, and, for each $j \in [0,m)$, sets $$a_{j,0} = -\sum_{i=1}^{n-1} a_{j,i}.$$
     \item The prover computes the following:
     \begin{align*}
-        A &\equiv \func{MatrixCom}(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A) \\
-        B &\equiv \func{MatrixCom}(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, r_B) \\
-        C &\equiv \func{MatrixCom}(\lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_C) \\
-        D &\equiv \func{MatrixCom}(\{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_D)
+        A &\equiv \func{MatrixCom}\left(\{a_{j,i}\}_{j,i=0}^{m-1,n-1}, \{-a_{j,i}^2\}_{j,i=0}^{m-1,n-1}, r_A\right) \\
+        B &\equiv \func{MatrixCom}\left(\{\delta(l_{j},i)\}_{j,i=0}^{m-1,n-1}, \lbrace a_{j,i}(1-2\delta(l_j,i))\rbrace_{j,i=0}^{m-1,n-1}, r_B\right)
     \end{align*}
-    \item For each $j \in [0,m)$, the prover selects $\rho^S_j, \rho^V_j \in \F$ uniformly at random, and computes the following:
+    \item For each $j \in [0,m)$, the prover selects $\rho_j, \rho'_j \in \F$ uniformly at random, and computes the following:
     \begin{align*}
-        G^S_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(S_k - S') + \com(0, \rho^S_j) \\
-        G^V_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(V_k - V') + \com(0, \rho^V_j)
+        X_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(S_k - S') + \comm(0, 0, \rho_j) \\
+        X'_j &\equiv \sum_{k=0}^{N-1}p_{k,j}(V_k - V') + \com(0, \rho'_j)
     \end{align*}
     Here each $p_{k,j}$ is defined such that for all $k \in [0,N)$ we have $$\prod_{j=0}^{m-1} \left( \delta(l_j,k_j)x + a_{j,k_j} \right) = \delta(l,k)x^m + \sum_{j=0}^{m-1} p_{k,j}x^j$$ for indeterminate $x$.
-    \item The prover sends $A, B, C, D, \{G^S_j, G^V_j\}_{j=0}^{m-1}$ to the verifier.
+    \item The prover sends $A, B, \{X_j, X'_j\}_{j=0}^{m-1}$ to the verifier.
     \item The verifier selects $x \in \F$ uniformly at random and sends it to the prover.
     \item For each $j \in [0,m)$ and $i \in [1,n)$, the prover computes $f_{j,i} \equiv \delta(l_{j},i)x + a_{j,i}$ and the following values:
     \begin{align*}
-        z_A &\equiv r_A + xr_B \\
-        z_C &\equiv xr_C + r_D \\
-        z_S &\equiv sx^m -  \sum_{j=0}^{m-1}\rho^S_j x^j \\
-        z_V &\equiv vx^m - \sum_{j=0}^{m-1}\rho^V_j x^j
+        z &\equiv r_A + xr_B \\
+        z_S &\equiv sx^m -  \sum_{j=0}^{m-1}\rho_j x^j \\
+        z_V &\equiv vx^m - \sum_{j=0}^{m-1}\rho'_j x^j
     \end{align*}
-    \item The prover sends $\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}, z_A, z_C, z_S, z_V$ to the verifier.
+    \item The prover sends $\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1}, z, z_S, z_V$ to the verifier.
     \item For each $j \in [0,m)$, the verifier sets $f_{j,0} \equiv x - \sum_{i=1}^{n-1} f_{j,i}$ and accepts the proof if and only if
-    \begin{align*}
-        A + xB &= \func{MatrixCom}(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, z_A) \\
-        xC + D &= \func{MatrixCom}(\lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z_C) \\
-    \end{align*}
+    $$A + xB = \func{MatrixCom}\left(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, \lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z\right)$$
     and
     \begin{align*}
-        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=0}^{m-1} x^jG^S_j &= \com(0, z_S) \\
-        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=0}^{m-1} x^jG^V_j &= \com(0, z_V)
+        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=0}^{m-1} x^j X_j &= \comm(0, 0, z_S) \\
+        \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=0}^{m-1} x^j X'_j &= \com(0, z_V)
     \end{align*}
     are true.
 \end{enumerate}
 
 This interactive protocol can be made non-interactive using the Fiat-Shamir technique, which replaces the verifier challenge $x$ with the output of a cryptographic hash function on transcript inputs.
-Proofs of completeness and special soundness are nearly identical to those of \cite{lelantus,triptych}, with only trivial and straightforward modifications.
-For clarity, we prove that the protocol is special honest-verifier zero knowledge.
+
+We now prove that the above protocol is complete, special sound, and honest-verifier zero knowledge.
+The proofs proceed similarly to those of \cite{bootle,lelantus,triptych}.
 
 \begin{proof}
-    To show that the protocol is special honest-verifier zero knowledge, we construct a simulator that, when provided a random verifier challenge $x$, produces a proof transcript identically distributed to that of a real proof.
+    Completeness of the protocol follows by straightforward algebra.
 
-    As in \cite{triptych}, we note that the simulator presented in \cite{bootle} applies directly to our context.
-    To produce our simulated transcript on random $x$, the simulator samples $B,\{G^S_j,G^V_j\}_{j=1}^{m-1} \in \G$ and $z_S,z_V \in \F$ uniformly at random.
-    It runs the simulator presented in \cite{bootle} to obtain $A,C,D \in \G$ and $z_A,z_C,\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$ and computes $\{f_{j,0}\}_{j=0}^{m-1}$ uniquely according to the protocol:
+    To show that the protocol is special honest-verifier zero knowledge, we construct a simulator that, when provided a valid statement and random verifier challenge $x$, produces a proof transcript identically distributed to that of a real proof.
+
+    To produce our simulated transcript on random $x$, the simulator samples $$B,\{X_j,X'_j\}_{j=1}^{m-1} \in \G$$ and $$z,z_S,z_V,\{f_{j,i}\}_{j=0,i=1}^{m-1,n-1} \in \F$$ uniformly at random.
+    It defines
     $$f_{j,0} = x - \sum_{i=1}^{n-1} f_{j,i}$$
-    It uses the final two verification equations to compute $G^S_0$ and $G^V_0$:
+    for each $j \in [0,m)$, and sets
+    $$A = \func{MatrixCom}\left(\lbrace f_{j,i} \rbrace_{j,i=0}^{m-1,n-1}, \lbrace f_{j,i}(x - f_{j,i})\rbrace_{j,i=0}^{m-1,n-1}, z\right) - xB$$
+    as well.
+    It uses the final two verification equations to compute $X_0$ and $X'_0$:
     \begin{alignat*}{1}
-        G^S_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=1}^{m-1} x^jG^S_j - \com(0, z_S) \\
-        G^V_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=1}^{m-1} x^jG^V_j - \com(0, z_V)
+        X_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(S_k - S') - \sum_{j=1}^{m-1} x^j X_j - \comm(0, 0, z_S) \\
+        X'_0 &= \sum_{k=0}^{N-1} \left(\prod_{j=0}^{m-1} f_{j,k_j}\right)(V_k - V') - \sum_{j=1}^{m-1} x^j X'_j - \com(0, z_V)
     \end{alignat*}
 
-    The transcript elements produced by the simulator in \cite{bootle} are identically distributed to those in real proofs by construction.
-    Since $\{\rho^S_j,\rho^V_j\}_{j=0}^{m-1}$ is sampled uniformly at random in a real proof and the decisional Diffie-Hellman problem is hard in $\G$, the set $\{G^S_j,G^V_j\}_{j=0}^{m-1}$ is independent and uniformly distributed in the simulation and in real proofs.
-    Finally, $z_S$ and $z_V$ are independent and uniformly distributed in both the simulation and in real proofs since $x$ was sampled randomly.
+    Since the challenge $x$ is sampled uniformly at random by construction, the commitment constructions are perfectly hiding, $\{\rho_j,\rho'_j\}_{j=0}^{m-1}$ are sampled uniformly at random in a real proof, and the decisional Diffie-Hellman problem is hard in $\G$, all proof elements in both the simulation and real proofs are either independently uniformly distributed at random or uniquely determined by other transcript elements.
     Hence the protocol is special honest-verifier zero knowledge.
+
+    We now show that the protocol is $(m+1)$-special sound for $m > 1$.
+    That is, we construct an extractor that, when presented with a set of $m+1$ distinct challenges and corresponding responses to the same initial statement, produces a set of extracted witness elements consistent with the statement.
+    Consider a collection of $m+1$ distinct challenges $\{x_\iota\}_{\iota=0}^m$, and corresponding valid responses:
+    $$\left\{ \{f_{j,i}^{(\iota)}\}_{j=0,i=1}^{m-1,n-1}, z^{(\iota)}, z_S^{(\iota)}, z_V^{(\iota)} \right\}_{\iota=0}^m$$
+    Successful verification on indices $\iota \in \{0,1\}$ gives the following:
+    \begin{multline*}
+        (x^{(0)} - x^{(1)})B = \func{MatrixCom}\left( \{f_{j,i}^{(0)} - f_{j,i}^{(1)}\}_{j,i=0}^{m-1,n-1}, \right. \\
+        \left. \{f_{j,i}^{(0)}(x^{(0)} - f_{j,i}^{(0)}) - f_{j,i}^{(1)}(x^{(1)} - f_{j,i}^{(1)})\}_{j,i=0}^{m-1,n-1}, z^{(0)} - z^{(1)} \right)
+    \end{multline*}
+    For all $j \in [0,m)$ and $i \in [0,n)$, if we let
+    $$b_{j,i} = \frac{f_{j,i}^{(0)} - f_{j,i}^{(1)}}{x^{(0)} - x^{(1)}}$$
+    and
+    $$c_{j,i} = \frac{f_{j,i}^{(0)}(x^{(0)} - f_{j,i}^{(0)}) - f_{j,i}^{(1)}(x^{(1)} - f_{j,i}^{(1)})}{x^{(0)} - x^{(1)}}$$
+    and
+    $$r_B = \frac{z^{(0)} - z^{(1)}}{x^{(0)} - x^{(1)}},$$
+    then we can express
+    $$B = \func{MatrixCom}\left( \{b_{j,i}\}_{j,i=0}^{m-1,n-1}, \{c_{j,i}\}_{j,i=0}^{m-1,n-1}, r_B \right).$$
+    If for $j \in [0,m)$ and $i \in [0,n)$ we further define
+    $$a_{j,i} = f_{j,i}^{(0)} - x^{(0)}b_{i,j}$$
+    and
+    $$d_{i,j} = f_{j,i}^{(0)}(x^{(0)} - f_{j,i}^{(0)}) - x^{(0)}c_{j,i}$$
+    and $r_A = z^{(0)} - x^{(0)}r_B$, then we can express
+    $$A = \func{MatrixCom}\left( \{a_{j,i}\}_{j,i=0}^{m-1,n-1}, \{d_{j,i}\}_{j,i=0}^{m-1,n-1}, r_A \right)$$
+    as well.
+    Observe that since the commitment construction is computationally binding, for all $\iota \in [0,m]$ we must have $b_{j,i}x^{(\iota)} + a_{j,i} = f_{j,i}^{(\iota)}$ and $c_{j,i}x^{(\iota)} + d_{j,i} = f_{j,i}^{(\iota)}(x^{(\iota)} - f_{j,i}^{(\iota)})$ for $j \in [0,m)$ and $i \in [0,n)$.
+    This implies in particular that for $\iota \in \{0,1,2\}, j \in [0,m), i \in [0,n)$ we have
+    $$c_{j,i}x^{(\iota)} + d_{j,i} = b_{j,i}(1 - b_{j,i})x^{(\iota) 2} + (1 - 2b_{j,i})a_{j,i}x^{(\iota)} - a_{j,i}^2$$
+    and hence $b_{j,i}(1 - b_{j,i}) = 0$, so each $b_{j,i} \in \{0,1\}$.
+
+    We also have, by construction, that
+    $$x^{(\iota)} = \sum_{i=0}^{n-1} f_{j,i}^{(\iota)} = x^{(\iota)} \sum_{i=0}^{n-1} b_{j,i} + \sum_{i=0}^{n-1} a_{j,i}$$
+    for $\iota \in [0,m], j \in [0,m)$, so $\sum_{i=0}^{n-1} b_{j,i} = 1$.
+    This means we can extract $l \in [0,N)$ such that each $b_{j,i} = \delta(l_j,i)$.
+
+    Now if we define for each $k \in [0,N)$ the polynomial
+    $$p_k(x) = \prod_{j=0}^{m-1} \left[ \delta(l_j,k_j)x + a_{j,k_j} \right]$$
+    in $x$, we have $\deg(p_k) = m$ if and only if $k = l$.
+    Verification can therefore be expressed as
+    \begin{align*}
+        x^{(\iota)m}(S_l - S') - \sum_{j=0}^{m-1} x^{(\iota)j} \overline{X}_j &= \comm(0,0,z_S^{(\iota)}) \\
+        x^{(\iota)m}(V_l - V') - \sum_{j=0}^{m-1} x^{(\iota)j} \overline{X}'_j &= \com(0,0,z_V^{(\iota)})
+    \end{align*}
+    for $\iota \in [0,m]$, where the sets $\{\overline{X}_j\}_{j=0}^{m-1}$ and $\{\overline{X}'_j\}_{j=0}^{m-1}$ can be uniquely derived.
+    Consider a Vandermonde matrix $V$ such that the $\iota$ row is the vector $(1, x^{(\iota)}, \ldots, x^{(\iota)m})$, and note since each challenge is distinct, we have $\det(V) \neq 0$ with high probability, so the rows of $V$ span $F^{m+1}$.
+    This means we can find $\{\theta_\iota\}_{\iota=0}^m$ such that the equation
+    $$\sum_{\iota=0}^m \theta_\iota x^{(\iota)j} = \delta(j,m)$$
+    holds for $j \in [0,m]$.
+
+    We can therefore build a linear combination of each of the two above verification equations, taking advantage of the Vandermonde-derived weights:
+    \begin{align*}
+        S_l - S' &= \sum_{\iota=0}^m \theta_\iota x^{(\iota)m}(S_l - S') + \sum_{\iota=0}^m \theta_\iota \left(x^{(\iota)j}\overline{X}_j\right) = \comm\left(0, 0, \sum_{\iota=0}^m \theta_\iota z_S^{(\iota)}\right) \\
+        V_l - V' &= \sum_{\iota=0}^m \theta_\iota x^{(\iota)m}(S_l - S') + \sum_{\iota=0}^m \theta_\iota \left(x^{(\iota)j}\overline{X}'_j\right) = \com\left(0, \sum_{\iota=0}^m \theta_\iota z_V^{(\iota)}\right)
+    \end{align*}
+    These equations provide the remaining extractions
+    $$s = \sum_{\iota=0}^m \theta_\iota z_S^{(\iota)}$$
+    and
+    $$v = \sum_{\iota=0}^m \theta_\iota z_V^{(\iota)}$$
+    such that $S_l - S' = \comm(0,0,s)$ and $V_l - V' = \com(0,v)$, which completes the proof.
 \end{proof}
 
 \section{Payment System Security}
