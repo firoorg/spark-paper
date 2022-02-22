@@ -88,15 +88,17 @@ Further, the construction is perfectly hiding and computationally binding.
 
 \subsection{Representation proving system}
 
-A representation proof is used to demonstrate knowledge of a discrete logarithm in zero knowledge.
+A representation proof is used to demonstrate knowledge of a set of discrete logarithms in zero knowledge.
 Let $pp_{\text{rep}} = (\G, \F)$ be the public parameters for such a construction, where $\G$ is a prime-order group where the discrete logarithm problems is hard and $\F$ is its scalar field.
 
 The proving system itself is a tuple of algorithms $(\func{RepProve},\func{RepVerify})$ for the following relation:
-$$\left\{ pp_{\text{rep}}, G, X \in \G ; x \in \F : X = xG \right\}$$
+$$\left\{ pp_{\text{rep}}, G, \{Y_i\}_{i=0}^{l-1} \subset \G ; \{y_i\}_{i=0}^{l-1} \subset \F : \forall i \in [0,l), Y_i = y_i G \right\}$$
 
 We require that the proving system be complete, special honest-verifier zero knowledge, and special sound; these definitions are standard \cite{groth}.
 
-The well-known Schnorr proving system may be used for this purpose.
+An aggregated Schnorr proving system, like that in \cite{batchschnorr}, may be used for this purpose.
+
+As a matter of notational convenience, we drop the set and subscript notation from these algorithms in the case where $l = 1$; this represents the case of a standard (non-aggregated) representation proof.
 
 
 \subsection{Modified Chaum-Pedersen Proving System}
@@ -202,7 +204,7 @@ The nonce, a part of the recipient address, the value, and the memo are encrypte
 \begin{itemize}
     \item Mint transactions.
     A mint transaction generates new coins of public value destined for a recipient public address in a confidential way, either through a consensus-enforced mining process, or by consuming transparent outputs from a non-Spark base layer.
-    In this transaction type, a representation proof is included to show that the minted coin is of the expected value.
+    In this transaction type, a representation proof is included to show that the minted coins are of the expected values.
     \item Spend transactions.
     A spend transaction consumes existing coins and generates new coins destined for one or more recipient public addresses in a confidential way.
     In this transaction type, a representation proof is included to show that the hidden input and output values are equal.
@@ -220,7 +222,7 @@ The setup process does not require any trusted parameter generation.
 \item $\func{CreateKeys}$: This algorithm produces keys that are used when constructing addresses, processing coins, and spending coins.
 \item $\func{CreateAddress}$: This algorithm produces diversified public addresses used for receiving coins.
 \item $\func{CreateCoin}$: This algorithm produces a coin of a given value that is destined for a recipient public address.
-\item $\func{Mint}$: This algorithm produces a transaction transferring public value to a recipient public address.
+\item $\func{Mint}$: This algorithm produces a transaction transferring public value to recipient public addresses.
 \item $\func{Identify}$: This algorithm processes a coin to determine if it is destined for a diversified address controlled by a recipient.
 \item $\func{Recover}$: This algorithm processes a coin to determine if it is destined for a diversified address controlled by a recipient, and produces additional data used for spending the coin or determining if it is already spent.
 \item $\func{Spend}$: This algorithm produces a transaction consuming existing coins and generating new coins of hidden value to recipient public addresses.
@@ -334,14 +336,19 @@ This algorithm generates new coins from either a consensus-determined mining pro
 Note that while such implementation-specific auxiliary data may be necessary for generating such a transaction and included, we do not specifically list this here.
 Notably, the coin value used in this algorithm is assumed to be the sum of all public input values as specified by the implementation.
 
-\textbf{Inputs}: Security parameter $\lambda$, public parameters $pp$, destination public address $\addr_{\text{pk}}$, coin value $v \in [0, v_{\text{max}})$, memo $m$
+\textbf{Inputs}:
+\begin{itemize}
+    \item Security parameter $\lambda$ and public parameters $pp$
+    \item A set of $t$ output coin public addresses, values, and memos: $$\{\addr_{\text{pk},j}, v_j, m_j\}_{j=0}^{t-1}$$
+\end{itemize}
 
 \textbf{Outputs}: Mint transaction $\text{tx}_{\text{mint}}$
 
 \begin{enumerate}
-\item Run $\func{CreateCoin}(\addr_{\text{pk}}, v, m, 1)$ to obtain coin $\func{Coin} = (S, K, C, v, \overline{r})$ and nonce $k$.
-\item Generate a value representation proof on the value commitment: $$\Pi_{\text{bal}} = \func{RepProve}(pp_{\text{rep}},H,C - \com(v,0); \hash_{\text{val}}(k))$$
-\item Output the mint transaction $\func{tx}_{\text{mint}} = (\func{Coin}, \Pi_{\text{bal}})$.
+    \item Generate a set $\func{OutCoins} = \{\func{CreateCoin}(\addr_{\text{pk},j}, v_j, m_j, 1)\}_{j=0}^{t-1}$ of output coins.
+    \item Parse the output coin value commitments $\{\overline{C}_j\}_{j=0}^{t-1}$ from $\func{OutCoins}$, where each $\overline{C}_j$ contains nonce $k_j$.
+    \item Generate a representation proof for value assertion: $$\Pi_{\text{val}} = \func{RepProve}\left( pp_{\text{rep}}, H, \{ \overline{C}_j - \com(v_j,0) \}_{j=0}^{t-1}; \{\hash_{\text{val}}(k_j)\}_{j=0}^{t-1} \right)$$
+    \item Output the mint transaction $\func{tx}_{\text{mint}} = (\func{OutCoins}, \Pi_{\text{val}})$.
 \end{enumerate}
 
 
@@ -461,11 +468,14 @@ This algorithm assesses the validity of a transaction.
 
 If the input transaction is a mint transaction:
 \begin{enumerate}
-    \item Parse the transaction $\text{tx}_{\text{mint}} = (\func{Coin}, \Pi_{\text{bal}})$.
-    \item Parse the coin value, serial commitment, and value commitment $(v,S,C)$ from $\func{Coin}$.
-    \item If $S$ appears in an output coin from any previously-verified transaction, output 0.
-    \item Check that $v \in [0,v_{\text{max}})$, and output 0 if this fails.
-    \item Check that $\func{RepVerify}(pp_{\text{rep}},\Pi_{\text{bal}},H,C - \com(v,0))$, and output 0 if this fails.
+    \item Parse the transaction $\text{tx}_{\text{mint}} = (\func{OutCoins}, \Pi_{\text{val}})$.
+    \item Parse the output coin values serial number commitments, and value commitments $\{(v_j, \overline{S}_j, \overline{C}_j)\}_{j=0}^{t-1}$ from $\func{OutCoins}$.
+    \item For each $j \in [0,t)$:
+    \begin{enumerate}
+        \item If $\overline{S}_j$ appears in an output coin in this transaction or in any previously-verified transaction, output 0.
+        \item Check that $v_j \in [0,v_{\text{max}})$, and output 0 if this fails.
+    \end{enumerate}
+    \item Check that $\func{RepVerify}\left( pp_{\text{rep}}, \Pi_{\text{val}}, H, \{\overline{C}_j - \com(v_j, 0)\}_{j=0}^{t-1} \right)$, and output 0 if this fails.
     \item Output 1.
 \end{enumerate}
 
@@ -478,7 +488,7 @@ If the input transaction is a spend transaction:
     \end{multline*}
     \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
     \item Parse the output coin serial commitments, value commitments, and range proofs $\{ \overline{S}_j, \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
-    \item For each $u \in [0,w):$
+    \item For each $u \in [0,w)$:
     \begin{enumerate}
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
         \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
@@ -1006,7 +1016,7 @@ The resulting augmented ledger $(L, \vec{a})$ is balanced if the following condi
     \item\label{cond:balance} For each $(\text{tx}_{\text{spend}}, a)$ in $(L, \vec{a})$ with fee $f$ that consumes input coins with value commitment offsets $\{C_u'\}_{u=0}^{w-1}$ and generates coins with value commitments $\{\overline{C}_j\}_{j=0}^{t-1}$, $a$ contains values $\{v_u\}_{u=0}^{w-1}$ and $\{\overline{v}_j\}_{j=0}^{t-1}$ corresponding to the commitments such that the balance equation
     $$\sum_{u=0}^{w-1} v_u = \sum_{j=0}^{t-1} \overline{v}_j + f$$
     holds.
-    For each $(\text{tx}_{\text{mint}}, a)$ in $(L, \vec{a})$ with public value $v$ that generates a coin with value commitment $C$, $a$ contains a value $v'$ corresponding to the commitment such that $v = v'$.
+    For each $(\text{tx}_{\text{mint}}, a)$ in $(L, \vec{a})$ generating coins with value commitments $\{\overline{C}_j\}_{j=0}^{t-1}$ and public values $\{\overline{v}_j\}_{j=0}^{t-1}$, $a$ contains values $\{\overline{v}'_j\}_{j=0}^{t-1}$ corresponding to the commitments such that $\overline{v}_j = \overline{v}'_j$ for all $j \in [0,t)$.
     This implies that values cannot be created arbitrarily.
     
     \item\label{cond:honest} For each $\text{tx}_{\text{spend}}$ in $(L, \vec{a})$ inserted by $\mathcal{A}$ through an $\func{Insert}$ query, each consumed coin in $\text{tx}_{\text{spend}}$ is not recoverable by any address in $\func{ADDR}$.
@@ -1040,13 +1050,13 @@ Similarly to the previous argument, this implies distinct openings of the coin s
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:value}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:value} is non-negligible.
 Let $C$ be the value commitment of the coin consumed by an input of $\text{tx}_{\text{spend}}$ and generated in a previous transaction (of either type) in $(L, \vec{a})$.
-Since the generating transaction is valid, we have an extracted opening $C = vG + aH$ from either the balance proof (in a mint transasction) or the range proof (in a spend transaction).
+Since the generating transaction is valid, we have an extracted opening $C = vG + aH$ from either the value proof (in a mint transasction) or the range proof (in a spend transaction).
 Validity of the corresponding parallel one-out-of-many proof in $\text{tx}_{\text{spend}}$ gives an extracted discrete logarithm $C - C' = xH$, where $C'$ is the input's value commitment offset.
 But this immediately gives $C' = vG + (a - x)H$, a contradiction since the commitment scheme is binding.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:balance}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:balance} is non-negligible.
 If the augmented ledger $(L, \vec{a})$ contains a spend transaction that violates the balance equation, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, which is a contradiction.
-If instead the augmented ledger $(L, \vec{a})$ contains a mint transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding balance proof $\Pi_{\text{bal}}$ is valid, again a contradiction.
+If instead the augmented ledger $(L, \vec{a})$ contains a mint transaction that violates the balance requirement, this immediately implies a break in the commitment binding property since the corresponding value proof $\Pi_{\text{val}}$ is valid, again a contradiction.
 
 \textbf{$\mathcal{A}$ violates Condition \ref{cond:honest}:} Suppose that the probability $\mathcal{A}$ wins the game violating Condition \ref{cond:honest} is non-negligible.
 That is, $\mathcal{A}$ produces a spend transaction $\text{tx}_{\text{spend}}$ by an $\func{Insert}$ question that is valid on the augmented ledger $(L, \vec{a})$ and consumes a coin corresponding to a coin serial number commitment $S$ that can be recovered by a public address $(d, Q_1, Q_2) \in \func{ADDR}$.
@@ -1132,7 +1142,7 @@ The challenger outputs 1 if $b = b^\prime$, and 0 otherwise.
 
 We require the queries $Q$ and $Q^\prime$ be publicly consistent as follows
 If the query type of $Q$ and $Q^\prime$ is $\func{CreateAddress}$, both oracles generate the same address.
-If the query type of $Q$ and $Q^\prime$ is $\func{Mint}$, the minted values of both queries must be equal.
+If the query type of $Q$ and $Q^\prime$ is $\func{Mint}$, then the number of generated coins and the public value of each coin must be equal in both queries.
 If the query type of $Q$ and $Q^\prime$ is $\func{Spend}$, then:
 \begin{itemize}
     \item Both $Q$ and $Q^\prime$ must be well-formed and valid, so the referenced input coins must have been generated in a previous transaction on the ledger and be unspent.
@@ -1161,18 +1171,21 @@ Depending on the query type, the challenger acts as follows:
 \begin{itemize}
     \item Answering $\func{Insert}$ queries: The challenger proceeds as in the original $\func{LIND}$ experiment.
     \item Answering $\func{CreateAddress}$ queries: In this case the challenger replaces the public address components $(d,Q_1,Q_2)$ with random strings of the appropriate lengths, producing $\addr_{\text{pk}}$ that is returned to $\mathcal{A}$.
-    \item Answering $\func{Mint}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately:
+    \item Answering $\func{Mint}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $t$ is the number of generated coins specified by $\mathcal{A}$ as part of its queries:
     \begin{enumerate}
-        \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using $\func{CreateCoin}$ as usual.
-        \item Otherwise, it simulates coin generation:
+        \item For each $j \in [0,t)]$:
         \begin{enumerate}
-            \item Samples a recovery key $K$ uniformly at random.
-            \item Samples a serial number commitment $S$ uniformly at random.
-            \item Samples a value commitment $C$ uniformly at random.
-            \item Samples a random input used to produce an AEAD encryption key $\func{AEADKeyGen} \to k_{\text{enc}}$.
-            \item Simulates the recipient data encryption by selecting random $r$ of the proper length, and encrypting it to produce $$\func{AEADEncrypt}(k_{\text{enc}},\texttt{r},r) \to \overline{r}.$$
+            \item If $\mathcal{A}$ provided a public address $\addr_{\text{pk}}$ not generated by the challenger, it produces a coin using $\func{CreateCoin}$ as usual.
+            \item Otherwise, it simulates coin generation:
+            \begin{enumerate}
+                \item Samples a recovery key $K_j$ uniformly at random.
+                \item Samples a serial number commitment $S_j$ uniformly at random.
+                \item Samples a value commitment $\overline{C}_j$ uniformly at random.
+                \item Samples a random input used to produce an AEAD encryption key $\func{AEADKeyGen} \to k_{\text{enc}}$.
+                \item Simulates the recipient data encryption by selecting random $r$ of the proper length, and encrypting it to produce $$\func{AEADEncrypt}(k_{\text{enc}},\texttt{r},r) \to \overline{r}.$$
+            \end{enumerate}
         \end{enumerate}
-        \item Simulates the balance proof $\Pi_{\text{bal}}$ on the statement $(C - \com(v,0))$.
+        \item Simulates the value proof $\Pi_{\text{val}}$ on the statement $\{ \overline{C}_j - \com(v_j,0)\}_{j=0}^{t-1}$.
         \item Assembles the transaction and adds it to the ledger as appropriate.
     \end{enumerate}
     \item Answering $\func{Spend}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $w$ is the number of consumed coins and $t$ the number of generated coins specified by $\mathcal{A}$ as part of its queries:
