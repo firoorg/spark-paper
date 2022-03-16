@@ -550,6 +550,8 @@ To produce key components, each player $1 \leq \alpha \leq \nu$ engages in the f
 Using the tuple $(s_1,s_2,D)$, any player can additionally compute the full view key component $P_2 = \comm(s_2,0,0) + D$.
 Since each player holds the aggregate incoming view key, it can compute public addresses using $\func{CreateAddress}$ as needed.
 
+Note that each player should confirm that all other players have completed the key generation process before making addresses available to receive coins; otherwise, a malicious player might selectively fail to send its shares to all other players, meaning some players may be unable to properly compute their private spend key shares.
+
 
 \subsection{\texorpdfstring{$\func{Precompute}$}{Precompute}}
 
