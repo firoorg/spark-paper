@@ -392,7 +392,7 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 \begin{enumerate}
 \item Parse the full view key $\addr_{\text{full}} = (s_1, s_2, D, P_2)$.
 \item Arrange the corresponding incoming view key $\addr_{\text{in}} = (s_1, P_2)$.
-\item Run $\func{Identify}(\addr_{\text{in}},\func{Coin}$ to obtain $(v, m, i, k)$, and return failure if this operation fails.
+\item Run $\func{Identify}(\addr_{\text{in}},\func{Coin})$ to obtain $(v, m, i, k)$, and return failure if this operation fails.
 \item Compute the serial number $$s = \hash_{\text{ser}}(k) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output $(s, T, v, m, i, k)$.
