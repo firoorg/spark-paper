@@ -392,7 +392,7 @@ It is assumed that the recipient has run the $\func{Verify}$ algorithm on the tr
 \begin{enumerate}
 \item Parse the full view key $\addr_{\text{full}} = (s_1, s_2, D, P_2)$.
 \item Arrange the corresponding incoming view key $\addr_{\text{in}} = (s_1, P_2)$.
-\item Run $\func{Identify}(\addr_{\text{in}},\func{Coin}$ to obtain $(v, m, i, k)$, and return failure if this operation fails.
+\item Run $\func{Identify}(\addr_{\text{in}},\func{Coin})$ to obtain $(v, m, i, k)$, and return failure if this operation fails.
 \item Compute the serial number $$s = \hash_{\text{ser}}(k) + \hash_{Q_2}(s_1,i) + s_2$$ and tag $$T = (1/s)(U - D).$$
 \item If $T$ has been constructed in any other valid recovery, return failure.
 \item Output $(s, T, v, m, i, k)$.
@@ -698,6 +698,7 @@ Initial tests using a variable-time curve library suggest significant reductions
 
 The authors thank pseudonymous collaborator \texttt{koe} for ongoing discussions during the development of this work.
 The authors gratefully acknowledge Nikolas Kr\"{a}tzschmar for identifying an earlier protocol flaw relating to tag generation.
+The authors further thank independent researcher Luke Parker (\texttt{kayabaNerve}) for pointing out the failure of the security model to capture the case of an adversary producing a duplicate serial commitment prior to an honest transaction being added to the ledger.
 
 
 \bibliographystyle{splncs04}
@@ -970,6 +971,8 @@ Observe that the result also holds for duplicate tags revealed in the same (othe
 \subsection{Completeness}
 
 Completeness requires that no bounded adversary can prevent an honest user from spending a coin.
+\footnote{We note that the security model does not capture the case where an adversary observes a valid transaction prior to its addition to the ledger and generates its own transaction producing a coin with the same serial commitment, possibly rendering the honest transaction invalid.
+It is possible to mitigate this by allowing duplicate serial commitments on the ledger and requiring either coin identification to account for this by only accepting one such coin, or by binding unique data like linking tags or other additional context into serial commitments to be checked during coin identification.}
 Specifically, this means that if the user is able to identify a coin using its incoming view key, then it can recover the coin using its full view key and generate a valid spend transaction consuming the coin using its spend key.
 
 To see why this property holds, note that by construction, if an honest user is unable to produce a spend transaction for a coin with serial commitment $S$ that it has recovered, the corresponding tag $T$ must appear in a previous valid transaction.
