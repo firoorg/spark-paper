@@ -412,8 +412,8 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \item Security parameter $\lambda$ and public parameters $pp$
     \item A full view key $\addr_{\text{full}}$
     \item A spend key $\addr_{\text{sk}}$
-    \item A set of $N$ input coins $\func{InCoins}$ as part of a cover set
-    \item For each $u \in [0,w)$ coin to spend, the index in $\func{InCoins}$, serial number, tag, value, and nonce: $(l_u, s_u, T_u, v_u, k_u)$
+    \item For each $u \in [0,w)$ coin to spend, a set of $N$ input coins $\func{InCoins}_u$ as part of a cover set\footnote{It is straightforward to support the more general case where cover sets do not share a common size; for simplicity, we assume a shared common size here.} selected from coins generated in previous valid transactions
+    \item For each $u \in [0,w)$ coin to spend, the index in $\func{InCoins}_u$, serial number, tag, value, and nonce: $(l_u, s_u, T_u, v_u, k_u)$
     \item An integer fee value $f \in [0,v_{\text{max}})$
     \item A set of $t$ output coin public addresses, values, and memos: $$\{\addr_{\text{pk},j}, v_j, m_j\}_{j=0}^{t-1}$$
 \end{itemize}
@@ -423,14 +423,14 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
 \begin{enumerate}
     \item Parse the required full view key component $D$ from $\addr_{\text{full}}$.
     \item Parse the spend key $\addr_{\text{sk}} = (s_1, s_2, r)$.
-    \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
+        \item Parse the cover set serial number commitments and value commitments $\{(S_{i,u}, C_{i,u})\}_{i=0}^{N-1}$ from $\func{InCoins}_u$.
         \item Compute the serial number commitment offset: $$S_u' = \comm(s_u, 0, -\hash_{\text{ser}'}(s_u, D)) + D$$
         \item Compute the value commitment offset: $$C_u' = \com(v_u, \hash_{\text{val}'}(s_u, D))$$
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
-        (\Pi_{\text{par}})_u = \func{ParProve}(pp_{\text{par}},\{S_i, C_i\}_{i=0}^{N-1}, S_u',C_u'; \\
+        (\Pi_{\text{par}})_u = \func{ParProve}(pp_{\text{par}},\{S_{i,u}, C_{i,u}\}_{i=0}^{N-1}, S_u',C_u'; \\
         (l_u, \hash_{\text{ser}'}(s_u, D), \hash_{\text{val}}(k) - \hash_{\text{val}'}(s_u, D)))
         \end{multline*}
     \end{enumerate}
@@ -441,7 +441,7 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \Pi_{\text{bal}} = \func{RepProve}\left( pp_{\text{rep}}, H, \sum_{u=0}^{w-1} C_u' - \sum_{j=0}^{t-1} \overline{C}_j - \com(f,0); \right. \\
     \left. \sum_{u=0}^{w-1} \hash_{\text{val}'}(s_u,D) - \sum_{j=0}^{t-1} \hash_{\text{val}}(k_j) \right)
     \end{multline*}
-    \item Let $\mu = \hash_{\text{bind}}( \func{InCoins}, \func{OutCoins}, f, \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
+    \item Let $\mu = \hash_{\text{bind}}( \func{OutCoins}, f, \left\{ \func{InCoins}_u, S_u', C_u', T_u, (\Pi_{\text{par}})_u, \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )$.
     \item Generate a modified Chaum-Pedersen proof, where we additionally bind $\mu$ to the initial transcript:
     \begin{multline*}
     \Pi_{\text{chaum}} = \func{ChaumProve}((pp_{\text{chaum}}, \mu), \{S_u', T_u\}_{u=0}^{w-1}; \\
@@ -449,8 +449,8 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \end{multline*}
     \item Output the tuple:
     \begin{multline*}
-    \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \text{tx}_{\text{spend}} = ( \func{OutCoins}, f, \\
+    \left\{ \func{InCoins}_u, S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
 \end{enumerate}
 Note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
@@ -483,15 +483,15 @@ If the input transaction is a spend transaction:
 \begin{enumerate}
     \item Parse the transaction:
     \begin{multline*}
-    \text{tx}_{\text{spend}} = ( \func{InCoins}, \func{OutCoins}, f, \\
-    \left\{ S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \text{tx}_{\text{spend}} = ( \func{OutCoins}, f, \\
+    \left\{ \func{InCoins}_u, S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
     \end{multline*}
     \item Parse the cover set serial number commitments and value commitments $\{(S_i, C_i)\}_{i=0}^{N-1}$ from $\func{InCoins}$.
-    \item Parse the output coin serial commitments, value commitments, and range proofs $\{ \overline{S}_j, \overline{C}_j, (\Pi_{\text{rp}})_j \}_{j=0}^{t-1}$ from $\func{OutCoins}$.
     \item For each $u \in [0,w)$:
     \begin{enumerate}
+        \item Parse the cover set serial number commitments and value commitments $\{(S_{i,u}, C_{i,u})\}_{i=0}^{N-1}$ from $\func{InCoins}_u$, and check that each cover set member corresponds to a valid coin generated in a previous valid transaction.
         \item Check that $T_u$ does not appear again in this transaction or in any previously-verified transaction, and output 0 if it does.
-        \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_i,C_i\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
+        \item Check that $\func{ParVerify}(pp_{\text{par}},(\Pi_{\text{par}})_u,\{S_{i,u},C_{i,u}\}_{i=0}^{N-1},S_u',C_u')$, and output 0 if this fails.
     \end{enumerate}
     \item Compute the binding hash $\mu$ as before, check that $$\func{ChaumVerify}((pp_{\text{chaum}},\mu),\Pi_{\text{chaum}},\{S_u',T_u\}_{u=0}^{w-1}),$$ and output 0 if this fails.
     \item For each $j \in [0,t)$:
@@ -1179,7 +1179,7 @@ Additionally, we now define the behavior of the full simulator.
 \textbf{The simulation.} The simulation $\mathcal{D}^{\text{sim}}$ works as follows.
 As in the original experiment, $\mathcal{C}$ samples the system parameters $\func{Setup}(1^\lambda) \to pp$ and a random bit $b$, and initializes DAP oracles $\oracle_0$ and $\oracle_1$.
 Then $\mathcal{D}^{\text{sim}}$ proceeds in steps.
-At each step, it provides $\mathcal{A}$ with ledgers $L_{\text{\text{left}}} = L_{b}$ and $L_{\text{\text{right}}} = L_{1-b}$,after which $\mathcal{A}$ sends two publicly-consistent queries $(Q, Q^\prime)$ of the same type.
+At each step, it provides $\mathcal{A}$ with ledgers $L_{\text{\text{left}}} = L_{b}$ and $L_{\text{\text{right}}} = L_{1-b}$, after which $\mathcal{A}$ sends two publicly-consistent queries $(Q, Q^\prime)$ of the same type.
 Recall that the queries $Q$ and $Q^\prime$ are consistent with respect to public data and information related to the addresses controlled by $\mathcal{A}$.
 Depending on the query type, the challenger acts as follows:
 \begin{itemize}
@@ -1204,12 +1204,12 @@ Depending on the query type, the challenger acts as follows:
     \end{enumerate}
     \item Answering $\func{Spend}$ queries: The challenger does the following to answer $Q$ and $Q^\prime$ separately, where $w$ is the number of consumed coins and $t$ the number of generated coins specified by $\mathcal{A}$ as part of its queries:
     \begin{enumerate}
-        \item Parse the input cover set serial number commitments and value commitments as $\func{InCoins} = \{(S_i, C_i)\}_{i=0}^{N-1}$.
-        \item For each $u \in [0,w)$, where $l_u$ represents the index of the consumed coin in $\func{InCoins}$:
+        \item For each $u \in [0,w)$, where $l_u$ represents the index of the consumed coin in $\func{InCoins}_u$:
         \begin{enumerate}
+            \item Parses the input cover set serial number commitments and value commitments as $\func{InCoins}_u = \{(S_{i,u}, C_{i,u})\}_{i=0}^{N-1}$.
             \item Samples a tag $T_u$ uniformly at random.
             \item Samples a serial number commitment offset $S_u'$ and value commitment offset $C_u'$ uniformly at random.
-            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_i, C_i\}_{i=0}^{N-1},S_u',C_u')$.
+            \item Simulates a parallel one-out-of-many proof $(\Pi_{\text{par}})_u$ on the statement $(\{S_{i,u}, C_{i,u}\}_{i=0}^{N-1},S_u',C_u')$.
         \end{enumerate}
         \item For each $j \in [0,t)$:
         \begin{enumerate}
