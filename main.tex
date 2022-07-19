@@ -57,7 +57,7 @@ A parallel proving system adapted from a construction by Groth and Bootle \texti
 Spark transactions support efficient verification in batches, where range and spend proofs can take advantage of common proof elements and parameters to lower the marginal cost of verifying each proof in such a batch; when coupled with suitably-chosen sender anonymity sets, the verification time savings of batch verification can be significant.
 
 Spark enables additional useful functionality.
-The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost,schnorrwithschnorr} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
+The use of a modified Chaum-Pedersen discrete logarithm proof, which asserts spend authority and correct tag construction, enables efficient signing and multisignature operations similar to those of \cite{musig,frost,schnorrwithschnorr,bellare_frost} where computationally-expensive proofs may be offloaded to more capable devices with limited trust requirements.
 The protocol further adds three levels of opt-in visibility into transactions without delegating spend authority.
 Incoming view keys allow a designated third party to identify transactions containing outputs destined for an address, as well as the corresponding amounts and encrypted memo data.
 Full view keys allow a designated third party to additionally identify when received outputs are later spent (but without any recipient data), which enables balance auditing and further enhances accountability in threshold multisignature applications where this property is desired.
@@ -510,8 +510,13 @@ If the input transaction is a spend transaction:
 It is often useful to permit transactions requiring multiple parties to authorize; the parties may be mututally untrusting, and it may not be sufficient to rely on a separate trusted third party.
 In this case, we require processes for distributed key and spend transaction generation that require either a set of specified parties or a threshold subset of a given size to complete.
 Specifically, we describe a method for such signing groups to perform the $\func{CreateKeys}$ and $\func{Spend}$ algorithms to produce keys and spend transactions indistinguishable from others.
-This method uses techniques from \cite{musig,schnorr,schnorrwithschnorr}.
-We defer a complete security analysis to future work.
+
+The method we use is inspired by techniques from previous work.
+Because view keys are assumed to be fully known by all signers in a group, we use a method related to that of MuSig \cite{musig}, for which we do not require any threshold computations.
+For spend key generation and threshold signing, FROST \cite{frost} introduces a one-round process with a precomputation phase that can be performed either during key generation or at the time of signing.
+Later work \cite{schnorrwithschnorr} examines FROST security and proposes a more efficient signing protocol for it; however, this introduces subtle security implications that are examined and addressed in \cite{bellare_frost}.
+We use this approach for our signing process.
+Note that we defer a complete security analysis of our construction to future work.
 
 Throughout this section, suppose we have a group of $\nu$ players who wish to collaboratively produce keys, and such that a specified threshold $1 \leq t \leq \nu$ of the players is required to produce an authorizing proof spending coins directed to any address associated to the keys.
 
@@ -562,7 +567,7 @@ In particular, the group may wish to do so during the key generation process, wh
 
 To precompute $\pi$ sets of nonce data, each player $1 \leq \alpha \leq \nu$ engages in the following one-round process:
 \begin{enumerate}
-    \item For $0 \leq k < \pi$, it selects $d_{\alpha,k}, e_{\alpha,k} \in \F$ uniformly at random and defines $D_{\alpha,k} = d_{\alpha,k}G$ and $E_{\alpha,k} = e_{\alpha,k}G$.
+    \item For $0 \leq k < \pi$, it selects $d_{\alpha,k}, e_{\alpha,k} \in \F \setminus \{0\}$ uniformly at random and defines $D_{\alpha,k} = d_{\alpha,k}G$ and $E_{\alpha,k} = e_{\alpha,k}G$.
     \item Generates a vector $L_\alpha$ such that for $0 \leq k < \pi$, we have $L_{\alpha,k} = (D_{\alpha,k}, E_{\alpha,k})$; that is, $L_{\alpha}$ contains $\pi$ nonce pairs.
     \item Sends $L_\alpha$ to all other players.
     \item On receipt of a vector $L_\beta$ from another player $\beta$, checks that $D_{\beta,k} \neq 0$ and $E_{\beta,k} \neq 0$ for all $0 \leq k < \pi$, and aborts otherwise.
@@ -581,21 +586,25 @@ Further, assume that each nonce list $L_\alpha$ contains $k + 1 \geq w$ unused n
 We also assume the context binding value $\mu$ has been defined.
 Each such player $\alpha$ engages in the following one-round process:
 \begin{enumerate}
-    \item Parses the next available set of nonces $\{(D_{\beta,k-u},E_{\beta,k-u})\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute, for $0 \leq u < w$, the following:
-    $$\rho_u = \hash_{\rho}(\{\beta,D_{\beta,k-u},E_{\beta,k-u}\}_{\beta=1}^{t},\mu,S_u',T_u)$$
-    \item Sets the initial proof commitments:
-    \begin{align*}
-        A_1 &= \sum_{u=0}^{w-1} \left( \hash_F(\rho_u)F + \hash_H(\rho_u)H + \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho E_{\beta,k-u} \right) \right) \\
-        \{A_{2,u}\}_{u=0}^{w-1} &= \left\{ \hash_F(\rho_u)T_u + \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho E_{\beta,k-u} \right) \right\}
-    \end{align*}
+    \item Parses the next available set of nonces $\{(D_{\beta,k-u},E_{\beta,k-u})\}_{u=0}^{w-1}$ in each $L_\beta$ for $1 \leq \beta \leq t$ (and removes them from each list after use) to compute, for $0 \leq u < w$ and $1 \leq \gamma \leq t$, the following:
+    $$\rho_{u,\gamma} = \hash_{\rho}(\{\beta,D_{\beta,k-u},E_{\beta,k-u}\}_{\beta=1}^{t},\gamma,\mu,S_u',T_u)$$
+    \item Sets the initial proof commitments
+    \begin{multline*}
+        A_1 = \sum_{u=0}^{w-1} \Biggl( \hash_F\left( \{\rho_{u,\beta}\}_{\beta=1}^t \right)F + \hash_H\left( \{\rho_{u,\beta}\}_{\beta=1}^t \right)H + \\
+        \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho_{u,\beta} E_{\beta,k-u} \right) \Biggr)
+    \end{multline*}
+    and
+    \begin{equation*}
+        \{A_{2,u}\}_{u=0}^{w-1} = \left\{ \hash_F\left( \{\rho_{u,\beta}\}_{\beta=1}^t \right)T_u + \sum_{\beta=1}^t \left( D_{\beta,k-u} + \rho_{u,\beta} E_{\beta,k-u} \right) \right\}.
+    \end{equation*}
     \item Computes the challenge $c$ using the proof transcript as in the original $\func{Spend}$ description.
-    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $$t_{2,\alpha} = \sum_{u=0}^{w-1} (d_{\alpha,k-u} + \rho_u e_{\alpha,k-u} + \lambda_\alpha r_\alpha c^u),$$ and sends $t_{2,\alpha}$ to the other signing players.
-    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( D_{\beta,k-u} + \rho_u E_{\beta,k-u} + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
+    \item Computes its Lagrange coefficient $$\lambda_\alpha = \prod_{\beta=1,\beta \neq \alpha}^t \left( \frac{\beta}{\beta-\alpha} \right)$$ and the response share $$t_{2,\alpha} = \sum_{u=0}^{w-1} (d_{\alpha,k-u} + \rho_{u,\alpha} e_{\alpha,k-u} + \lambda_\alpha r_\alpha c^u),$$ and sends $t_{2,\alpha}$ to the other signing players.
+    \item On receipt of $t_{2,\beta}$ from another player, checks that $$t_{2,\beta}G = \sum_{u=0}^{w-1} \left( D_{\beta,k-u} + \rho_{u,\beta} E_{\beta,k-u} + c^u\lambda_{\beta} \sum_{\gamma=1}^{\nu}\sum_{j=0}^{t-1} \beta^j C_{\gamma,j} \right)$$ and aborts otherwise.
     \item On receipt of all $t_{2,\beta}$ values, computes the proof responses:
     \begin{align*}
-        \{t_{1,u}\}_{u=0}^{w-1} &= \{ \hash_F(\rho_u) + c^u s_u \} \\
+        \{t_{1,u}\}_{u=0}^{w-1} &= \left\{ \hash_F\left( \{\rho_{u,\beta}\}_{\beta=1}^t \right) + c^u s_u \right\} \\
         t_2 &= \sum_{\beta=1}^t t_{2,\beta} \\
-        t_3 &= \sum_{u=0}^{w-1} (\hash_H(\rho_u) - c^u \hash_{\text{ser}'}(s_u,D))
+        t_3 &= \sum_{u=0}^{w-1} \left( \hash_H\left( \{\rho_{u,\beta}\}_{\beta=1}^t \right) - c^u \hash_{\text{ser}'}(s_u,D) \right)
     \end{align*}
 \end{enumerate}
 
