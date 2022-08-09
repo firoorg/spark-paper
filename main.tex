@@ -137,10 +137,12 @@ We require that the proving system be complete, special honest-verifier zero kno
 We present an instantiation of such a proving system in Appendix \ref{app:parallel}.
 
 
-\subsection{Authenticated Encryption Scheme}
+\subsection{Key-Committing Authenticated Encryption Scheme}
 
-We require the use of an authenticated symmetric encryption with associated data (AEAD) scheme.
+We require the use of an authenticated symmetric encryption with associated data (AEAD) scheme that commits to keys.
 In the context of the Spark protocol, this construction is used to encrypt value, memo, and other data for use by the recipient of a transaction.
+Note that in general, AEAD schemes need not commit to keys; because Spark payment proofs require this property, we require it in the overall protocol.
+It is possible to generically extend an AEAD scheme using the technique of \cite{key_commitment} in a flexible manner by including a commitment to the key as part of the ciphertext, and by checking this commitment during authentication; we assume this approach when describing the algorithms here.
 
 Let $pp_{\text{aead}}$ be the public parameters for such a construction.
 The construction itself is a tuple of algorithms $(\func{AEADKeyGen},\func{AEADEncrypt},\func{AEADDecrypt})$.
@@ -645,7 +647,7 @@ By providing a payment proof, anyone can verify that the specified coin was dest
 
 It is instructive to examine the efficiency of spend transactions in size, generation complexity, and verification complexity.
 In addition to our previous notation for parameters, let $v_{\text{max}} = 2^{64}$, so coin values and fees can be represented by $8$-byte unsigned integers.
-Further, suppose coin memos are fixed at $M$ bytes in length, diversifiers are restricted to $I$ bytes in length, with a $16$-byte authentication tag; this is the case for the ChaCha20-Poly1305 authenticated symmetric encryption construction, for example \cite{chachapoly}.
+Further, suppose coin memos are fixed at $M$ bytes in length, diversifiers are restricted to $I$ bytes in length, with a $16$-byte authentication tag and $32$-byte key commitment; this is the case for the ChaCha20-Poly1305 authenticated symmetric encryption construction (modified using the technique in \cite{key_commitment}), for example \cite{chachapoly}.
 Additionally, the arguments in \cite{schnorr} imply that Schnorr representation proofs can use truncated hash outputs for reduced proof size.
 Transaction size data for specific component instantiations is given in Table \ref{table:size}, where we consider the size in terms of group elements, field elements, and other data.
 Note that we do not include input ambiguity set references in this data, as this depends on implementation-specific selection and representation criteria.
@@ -671,7 +673,7 @@ Note that we do not include input ambiguity set references in this data, as this
         \multicolumn{5}{|c|}{Output data ($t$ coins)} \\
         \hline
         $(S,K,C)$ & & $3t$ & & \\
-        $\overline{r}$ & ChaCha20-Poly1305 & & & $(8 + M + I + 16)t$ \\
+        $\overline{r}$ & ChaCha20-Poly1305 & & & $(8 + M + I + 48)t$ \\
         \hline
     \end{tabular}
 \end{table}
