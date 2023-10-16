@@ -433,7 +433,7 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
         \item Generate a parallel one-out-of-many proof:
         \begin{multline*}
         (\Pi_{\text{par}})_u = \func{ParProve}(pp_{\text{par}},\{S_{i,u}, C_{i,u}\}_{i=0}^{N-1}, S_u',C_u'; \\
-        (l_u, \hash_{\text{ser}'}(s_u, D), \hash_{\text{val}}(k) - \hash_{\text{val}'}(s_u, D)))
+        (l_u, \hash_{\text{ser}'}(s_u, D), \hash_{\text{val}}(k_u) - \hash_{\text{val}'}(s_u, D)))
         \end{multline*}
     \end{enumerate}
     \item Generate a set $\func{OutCoins} = \{\func{CreateCoin}(\addr_{\text{pk},j}, v_j, m_j, 0)\}_{j=0}^{t-1}$ of output coins.
