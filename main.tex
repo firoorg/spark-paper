@@ -452,7 +452,7 @@ It is assumed that the recipient has run the $\func{Recover}$ algorithm on all c
     \item Output the tuple:
     \begin{multline*}
     \text{tx}_{\text{spend}} = ( \func{OutCoins}, f, \\
-    \left\{ \func{InCoins}_u, S_u', C_u', T_u, (\Pi_{\text{par}})_u, \Pi_{\text{chaum}} \right\}_{u=0}^{w-1}, \Pi_{\text{bal}} )
+    \left\{ \func{InCoins}_u, S_u', C_u', T_u, (\Pi_{\text{par}})_u \right\}_{u=0}^{w-1}, \Pi_{\text{chaum}}, \Pi_{\text{bal}} )
     \end{multline*}
 \end{enumerate}
 Note that it is possible to modify the balance proof to account for other input or output values not represented by coin value commitments, similarly to the handling of fees.
