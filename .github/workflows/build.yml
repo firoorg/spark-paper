@@ -9,14 +9,14 @@ jobs:
 
     steps:
       - name: Prepare repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Build document
-        uses: xu-cheng/latex-action@v2
+        uses: xu-cheng/latex-action@v3
         with:
           root_file: main.tex
           post_compile: "if [[ $(grep -ic overfull *.log) != 0 ]]; then echo 'Margin overrun detected; failing...' && exit 1; fi"
       - name: Store PDF
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Output PDF
           path: ./*.pdf
